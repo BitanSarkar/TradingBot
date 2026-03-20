@@ -77,7 +77,11 @@ def main():
 
         from universe import StockUniverse
         u = StockUniverse()
-        u.refresh(force=args.force)
+        try:
+            u.refresh(force=args.force)
+        except RuntimeError as exc:
+            print(f"\n  ❌  {exc}")
+            sys.exit(1)
 
         symbols = u.all_symbols()
         sectors = u.all_sectors()

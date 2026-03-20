@@ -90,6 +90,22 @@ class StockUniverse:
 
         log.info("Refreshing stock universe via nselib…")
         self._fetch_equity_list()
+
+        if not self._stocks:
+            raise RuntimeError(
+                "\n"
+                "  ✗  Could not fetch NSE equity list — 0 symbols returned.\n"
+                "\n"
+                "  Most likely cause: NSE blocks requests from AWS / cloud IPs.\n"
+                "\n"
+                "  Fix — copy the cache from your local Mac to EC2:\n"
+                "\n"
+                "    On your Mac (after running 'python bootstrap.py' locally):\n"
+                "      rsync -avz --progress cache/ ec2-user@<YOUR_EC2_IP>:~/TradingBot/cache/\n"
+                "\n"
+                "  Then re-run on EC2 — it will use the transferred cache directly."
+            )
+
         self._fetch_sector_mappings()
         self._save_cache()
         log.info(
