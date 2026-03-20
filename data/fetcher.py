@@ -38,7 +38,8 @@ from data.cache import DataCache
 log = logging.getLogger("DataFetcher")
 
 _LOOKBACK_DAYS    = 365   # 1 year of daily OHLCV for indicator calculation
-_MAX_WORKERS      = 20    # parallel threads — keep <= 30 to respect NSE rate limits
+_MAX_WORKERS      = 20    # parallel threads for nselib (keep <= 30)
+_YF_CHUNK         = 200   # symbols per yfinance batch call (avoids rate limiting)
 _NSELIB_FMT       = "%d-%m-%Y"   # nselib date format: DD-MM-YYYY
 _LIVE_QUOTE_TTL   = 90    # seconds — refresh live intraday candle at most every 90s
 
@@ -324,12 +325,31 @@ class DataFetcher:
     # ------------------------------------------------------------------
 
     def _parallel_fetch_ohlcv(self, symbols: list[str]) -> tuple[int, int]:
-        """Returns (ok_count, failed_count)."""
+        """
+        Three-phase OHLCV download.  Returns (ok_count, failed_count).
+
+        Phase 1 — nselib (20 parallel workers, fast):
+          Authoritative NSE feed.  May fail if NSE changes API column names.
+
+        Phase 2 — yfinance BATCH (one grouped API call per 200-symbol chunk):
+          Yahoo Finance NSE mirror ("SYMBOL.NS").  Reliable, no rate-limit
+          issues because we batch many symbols into a single request instead
+          of making one request per symbol in parallel.
+
+        Phase 3 — nsepy (one-by-one, slow):
+          Last resort.  Broken on Python 3.14+ but kept for older envs.
+        """
+        today   = date.today()
+        from_dt = today - timedelta(days=_LOOKBACK_DAYS)
+
+        # ── Phase 1: nselib ───────────────────────────────────────────────
+        nselib_fail: list[str] = []
         success = fail = done = 0
         total = len(symbols)
-        _PROGRESS_EVERY = max(1, min(200, total // 10))   # log every ~10% or 200 symbols
+        _PROGRESS_EVERY = max(1, min(200, total // 10))
+
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-            futures = {pool.submit(self._fetch_ohlcv_one, s): s for s in symbols}
+            futures = {pool.submit(self._nselib_ohlcv, s, from_dt, today): s for s in symbols}
             for fut in as_completed(futures):
                 sym = futures[fut]
                 try:
@@ -338,31 +358,117 @@ class DataFetcher:
                         self._cache.save_ohlcv(sym, df)
                         success += 1
                     else:
-                        fail += 1
+                        nselib_fail.append(sym)
                 except Exception as exc:
-                    log.debug("OHLCV failed for %s: %s", sym, exc)
-                    fail += 1
+                    log.debug("[nselib] %s: %s", sym, exc)
+                    nselib_fail.append(sym)
                 done += 1
                 if done % _PROGRESS_EVERY == 0 or done == total:
-                    pct = done / total * 100
                     log.info(
-                        "  OHLCV  [%d/%d]  %.0f%%  ✓ %d  ✗ %d",
-                        done, total, pct, success, fail,
+                        "  nselib [%d/%d]  %.0f%%  ✓ %d  ✗ %d",
+                        done, total, done / total * 100, success, len(nselib_fail),
                     )
+
+        # ── Phase 2: yfinance batch ───────────────────────────────────────
+        yf_fail: list[str] = nselib_fail
+        if nselib_fail:
+            log.info(
+                "yfinance batch fallback for %d symbols (chunks of %d)…",
+                len(nselib_fail), _YF_CHUNK,
+            )
+            yf_ok, yf_fail = self._yfinance_batch_fetch(nselib_fail, from_dt, today)
+            success += yf_ok
+            log.info("yfinance batch done: ✓ %d  ✗ %d", yf_ok, len(yf_fail))
+
+        # ── Phase 3: nsepy (one-by-one, last resort) ──────────────────────
+        for sym in yf_fail:
+            try:
+                df = self._nsepy_ohlcv(sym, from_dt, today)
+                if df is not None and not df.empty:
+                    self._cache.save_ohlcv(sym, df)
+                    success += 1
+                else:
+                    fail += 1
+            except Exception as exc:
+                log.debug("[nsepy] %s: %s", sym, exc)
+                fail += 1
+
         log.info("OHLCV refresh done: %d ok / %d failed.", success, fail)
         return success, fail
 
+    def _yfinance_batch_fetch(
+        self, symbols: list[str], from_dt: date, to_dt: date
+    ) -> tuple[int, list[str]]:
+        """
+        Download OHLCV for a list of symbols using yfinance batch mode.
+        Downloads _YF_CHUNK symbols per API call to stay within Yahoo's limits.
+        Returns (ok_count, still_failed_symbols).
+        """
+        import yfinance as yf
+        ok      = 0
+        failed  = []
+
+        for i in range(0, len(symbols), _YF_CHUNK):
+            chunk   = symbols[i : i + _YF_CHUNK]
+            tickers = [f"{s}.NS" for s in chunk]
+            try:
+                raw = yf.download(
+                    tickers,
+                    start    = from_dt.isoformat(),
+                    end      = to_dt.isoformat(),
+                    progress = False,
+                    auto_adjust = True,
+                    threads  = True,   # yfinance manages its own internal threading
+                )
+            except Exception as exc:
+                log.debug("[yfinance] batch chunk %d-%d failed: %s", i, i + _YF_CHUNK, exc)
+                failed.extend(chunk)
+                continue
+
+            if raw is None or raw.empty:
+                failed.extend(chunk)
+                continue
+
+            for sym, ticker in zip(chunk, tickers):
+                try:
+                    if isinstance(raw.columns, pd.MultiIndex):
+                        # Multi-ticker download: columns are (metric, ticker)
+                        sym_df = raw.xs(ticker, axis=1, level=1).copy()
+                    else:
+                        # Single-ticker fallback: flat columns
+                        sym_df = raw.copy()
+
+                    sym_df = sym_df[[c for c in ("Open","High","Low","Close","Volume")
+                                     if c in sym_df.columns]]
+                    sym_df = sym_df.apply(pd.to_numeric, errors="coerce").dropna(how="all")
+                    sym_df.index = pd.to_datetime(sym_df.index)
+                    sym_df.sort_index(inplace=True)
+
+                    if not sym_df.empty:
+                        self._cache.save_ohlcv(sym, sym_df)
+                        ok += 1
+                    else:
+                        failed.append(sym)
+                except Exception as exc:
+                    log.debug("[yfinance] %s extract failed: %s", sym, exc)
+                    failed.append(sym)
+
+            log.info(
+                "  yfinance [%d/%d]  ✓ %d so far",
+                min(i + _YF_CHUNK, len(symbols)), len(symbols), ok,
+            )
+
+        return ok, failed
+
     def _fetch_ohlcv_one(self, symbol: str) -> Optional[pd.DataFrame]:
         """
-        Fetch OHLCV for a single symbol.  Source priority:
-          1. nselib  — fast, authoritative; fails when NSE changes column names
-          2. yfinance — reliable Yahoo Finance NSE mirror; works from EC2 / any IP
-          3. nsepy   — last resort; broken on Python 3.14+
+        Single-symbol fetch (used by get_ohlcv() for on-demand loads).
+        Tries nselib → yfinance → nsepy in order.
+        NOT used for bulk bootstrap (use _parallel_fetch_ohlcv instead).
         """
         today   = date.today()
         from_dt = today - timedelta(days=_LOOKBACK_DAYS)
 
-        # Method 1: nselib
         try:
             df = self._nselib_ohlcv(symbol, from_dt, today)
             if df is not None and not df.empty:
@@ -370,7 +476,6 @@ class DataFetcher:
         except Exception as exc:
             log.debug("[nselib] %s: %s", symbol, exc)
 
-        # Method 2: yfinance (Yahoo Finance NSE mirror — "SYMBOL.NS")
         try:
             df = self._yfinance_ohlcv(symbol, from_dt, today)
             if df is not None and not df.empty:
@@ -378,7 +483,6 @@ class DataFetcher:
         except Exception as exc:
             log.debug("[yfinance] %s: %s", symbol, exc)
 
-        # Method 3: nsepy (broken on Python 3.14 but kept for older environments)
         try:
             df = self._nsepy_ohlcv(symbol, from_dt, today)
             if df is not None and not df.empty:

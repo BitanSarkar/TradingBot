@@ -63,6 +63,7 @@ def get_logger(name: str = "TradingBot") -> logging.Logger:
             "huggingface_hub", "accelerate",
             "nsepy", "nselib",
             "charset_normalizer",
+            "yfinance", "peewee",              # yfinance internal noise
         ):
             logging.getLogger(lib).setLevel(logging.ERROR)
 
