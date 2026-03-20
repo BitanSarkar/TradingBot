@@ -59,7 +59,7 @@ _SECTOR_INDICES: dict[str, str] = {
 
 _CACHE_DIR      = Path("cache")
 _UNIVERSE_CACHE = _CACHE_DIR / "universe.json"
-_CACHE_TTL_DAYS = 1
+_CACHE_TTL_DAYS = 7   # universe changes rarely; 7-day TTL avoids hammering NSE
 
 
 class StockUniverse:
@@ -92,19 +92,26 @@ class StockUniverse:
         self._fetch_equity_list()
 
         if not self._stocks:
-            raise RuntimeError(
-                "\n"
-                "  ✗  Could not fetch NSE equity list — 0 symbols returned.\n"
-                "\n"
-                "  Most likely cause: NSE blocks requests from AWS / cloud IPs.\n"
-                "\n"
-                "  Fix — copy the cache from your local Mac to EC2:\n"
-                "\n"
-                "    On your Mac (after running 'python bootstrap.py' locally):\n"
-                "      rsync -avz --progress cache/ ec2-user@<YOUR_EC2_IP>:~/TradingBot/cache/\n"
-                "\n"
-                "  Then re-run on EC2 — it will use the transferred cache directly."
-            )
+            # nselib failed (likely EC2/cloud IP blocked by NSE) and no cache exists.
+            if self._cache_file.exists():
+                log.warning(
+                    "nselib fetch failed and cache is stale — loading stale cache as fallback."
+                )
+                self._load_cache()
+            else:
+                raise RuntimeError(
+                    "\n"
+                    "  ✗  Could not fetch NSE equity list — 0 symbols returned.\n"
+                    "\n"
+                    "  Most likely cause: NSE blocks requests from AWS / cloud IPs.\n"
+                    "\n"
+                    "  Fix — copy the cache from your local Mac to EC2 (one-time):\n"
+                    "\n"
+                    "    rsync -avz --progress cache/universe.json \\\n"
+                    "      ec2-user@<YOUR_EC2_IP>:~/TradingBot/cache/universe.json\n"
+                    "\n"
+                    "  After that, EC2 will reuse the cache automatically (7-day TTL)."
+                )
 
         self._fetch_sector_mappings()
         self._save_cache()
