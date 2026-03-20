@@ -1,4 +1,4 @@
-growwapi>=0.0.8
+growwapi>=1.5.0
 python-dotenv>=1.0.0
 
 # NSE data sources
@@ -9,7 +9,8 @@ nsepy>=0.8
 pandas>=2.0.0
 numpy>=1.26.0
 requests>=2.31.0
-pyarrow>=15.0.0
+urllib3>=2.0.0          # used directly for Retry + HTTPAdapter pool tuning
+pyarrow>=15.0.0         # pandas parquet backend (data/cache.py)
 
 # News & sentiment
 feedparser>=6.0.0
