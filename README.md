@@ -6,97 +6,177 @@ A fully automated, score-driven equity trading bot for the Indian stock market (
 
 ## Table of Contents
 
-1. [Architecture Diagram](#architecture-diagram)
-2. [What This Bot Actually Does](#what-this-bot-actually-does)
-3. [Background & Theory](#background--theory)
+1. [High-Level Architecture](#high-level-architecture)
+2. [Detailed Flowchart](#detailed-flowchart)
+3. [What This Bot Actually Does](#what-this-bot-actually-does)
+4. [Background & Theory](#background--theory)
    - [Why Algorithmic Trading?](#why-algorithmic-trading)
    - [The Scoring Philosophy](#the-scoring-philosophy)
-4. [Technical Indicators — Theory & Formula](#technical-indicators--theory--formula)
+5. [Technical Indicators — Theory & Formula](#technical-indicators--theory--formula)
    - [RSI — Relative Strength Index](#1-rsi--relative-strength-index)
    - [MACD — Moving Average Convergence Divergence](#2-macd--moving-average-convergence-divergence)
    - [Bollinger Bands](#3-bollinger-bands)
    - [SMA Crossover](#4-sma-crossover-golden--death-cross)
    - [Volume Trend](#5-volume-trend)
    - [Price Momentum](#6-price-momentum)
-5. [Fundamental Indicators — Theory & Formula](#fundamental-indicators--theory--formula)
+6. [Fundamental Indicators — Theory & Formula](#fundamental-indicators--theory--formula)
    - [P/E Ratio](#1-pe-ratio-price-to-earnings)
    - [P/B Ratio](#2-pb-ratio-price-to-book)
    - [ROE](#3-roe-return-on-equity)
    - [Debt-to-Equity](#4-debt-to-equity-ratio)
    - [Revenue & Earnings Growth](#5-revenue--earnings-growth)
    - [Profit Margin](#6-profit-margin)
-6. [Composite Score — How It Is Derived](#composite-score--how-it-is-derived)
-7. [Sector-Specific Tuning](#sector-specific-tuning)
-8. [Project Structure](#project-structure)
-9. [Data Pipeline](#data-pipeline)
-10. [How to Run](#how-to-run)
-11. [Customising Your Strategy](#customising-your-strategy)
+7. [Composite Score — How It Is Derived](#composite-score--how-it-is-derived)
+8. [Sector-Specific Tuning](#sector-specific-tuning)
+9. [Project Structure](#project-structure)
+10. [Data Pipeline](#data-pipeline)
+11. [How to Run](#how-to-run)
+12. [Customising Your Strategy](#customising-your-strategy)
 
 ---
 
-## Architecture Diagram
+## High-Level Architecture
 
+Five layers — data flows left to right, orders exit at the end.
+
+```mermaid
+graph LR
+    A("🏦 NSE India\nnselib · nsepy")
+    B("🗄️ Data Layer\nUniverse · OHLCV · Cache")
+    C("⚙️ Scoring Engine\n0 – 100 per stock")
+    D("🧠 Strategy\nSignals · Risk Gate")
+    E("📈 Groww API\nBuy / Sell Orders")
+
+    A -->|price history\n& symbols| B
+    B -->|OHLCV +\nfundamentals| C
+    C -->|ranked\nscores| D
+    D -->|order\nrequests| E
+
+    style A fill:#1e3a5f,color:#fff,stroke:#4a90d9
+    style B fill:#1e3a5f,color:#fff,stroke:#4a90d9
+    style C fill:#1a4731,color:#fff,stroke:#2ecc71
+    style D fill:#4a2040,color:#fff,stroke:#e056fd
+    style E fill:#3d1f1f,color:#fff,stroke:#e74c3c
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           bot.py  (Orchestrator)                         │
-│                                                                           │
-│   config.py ──► Config                                                   │
-│   (thresholds,       │                                                   │
-│    risk limits)      ▼                                                   │
-│              ┌───────────────┐                                           │
-│              │  TradingBot   │◄── KeyboardInterrupt / daily schedule     │
-│              └──────┬────────┘                                           │
-│                     │  every tick (default: 5 min)                       │
-│                     ▼                                                     │
-│        ┌────────────────────────┐                                        │
-│        │  ScoreBasedStrategy    │                                        │
-│        └──────────┬─────────────┘                                        │
-│                   │                                                       │
-│        ┌──────────▼──────────┐                                           │
-│        │   ScoringEngine     │  (8 parallel threads)                     │
-│        └──────────┬──────────┘                                           │
-│                   │                                                       │
-│     ┌─────────────┼──────────────┐                                       │
-│     ▼             ▼              ▼                                        │
-│  Universe      Fetcher       ScoreRegistry                               │
-│  (2,117        (nselib +     (16 sectors ×                               │
-│   symbols +    nsepy +       sector scorer)                              │
-│   sector map)  parquet                                                   │
-│                cache)    ┌───────────────────────────────────┐           │
-│                          │  Sector Scorer (per symbol)        │          │
-│                          │                                    │          │
-│                          │  TechnicalScorer   (RSI, MACD,     │          │
-│                          │                    BB, SMA, Vol,   │          │
-│                          │                    Momentum)       │          │
-│                          │         ×  weight_tech             │          │
-│                          │                                    │          │
-│                          │  FundamentalScorer (P/E, P/B,      │          │
-│                          │                    ROE, D/E,       │          │
-│                          │                    Growth,         │          │
-│                          │                    Margin)         │          │
-│                          │         ×  weight_fund             │          │
-│                          │                                    │          │
-│                          │  MomentumScore     (1M/3M/6M       │          │
-│                          │                    price return)   │          │
-│                          │         ×  weight_mom              │          │
-│                          │                                    │          │
-│                          │  ──────────────────────────────    │          │
-│                          │  Composite Score  (0 – 100)        │          │
-│                          └───────────────────────────────────┘           │
-│                                      │                                   │
-│                     ┌────────────────▼────────────────┐                 │
-│                     │       Risk Gate                  │                 │
-│                     │  • Max daily loss (₹1,000)        │                 │
-│                     │  • Max holdings (10 stocks)       │                 │
-│                     │  • Can't sell what you don't hold │                 │
-│                     └────────────────┬────────────────┘                 │
-│                                      │                                   │
-│                     ┌────────────────▼────────────────┐                 │
-│                     │       OrderManager               │                 │
-│                     │  dry_run=True  → logs only       │                 │
-│                     │  dry_run=False → Groww API       │                 │
-│                     └─────────────────────────────────┘                 │
-└─────────────────────────────────────────────────────────────────────────┘
+
+| Layer | Responsibility |
+|-------|----------------|
+| **NSE India** | Source of truth — 2,117 symbols, daily OHLCV, fundamentals |
+| **Data Layer** | Fetches, normalises, and caches all market data to Parquet |
+| **Scoring Engine** | Scores every stock 0–100 using 16 sector-aware formulas |
+| **Strategy** | Converts scores into BUY/SELL signals, enforces risk rules |
+| **Groww API** | Executes real orders (or simulates them in dry-run mode) |
+
+---
+
+## Detailed Flowchart
+
+```mermaid
+flowchart TD
+    START(["▶ python bot.py"]):::terminal
+
+    subgraph STARTUP ["⚙️  STARTUP — runs once"]
+        A["Load Config\ndry_run · thresholds · risk limits"]
+        B{"dry_run\n= False?"}
+        C["Authenticate\nGroww API token"]
+        D["Skip Auth\nno real orders"]
+        E["Build Universe\nnselib → 2117 symbols + sector map"]
+        F{"universe.json\nfresh in cache?"}
+        G[("Fetch from nselib\n→ save to cache")]
+        H["Build ScoreRegistry\nwire 16 sectors → sector scorers\napply configure_registry() overrides"]
+    end
+
+    subgraph LOOP ["🔁  BOT LOOP — every 300 s"]
+        I["Fetch latest OHLCV candle\nfor all 2,117 symbols\nnselib · nsepy · parquet cache"]
+        J["Score all symbols\n8 parallel threads"]
+
+        subgraph SCORING ["Per symbol"]
+            S1["Technical Score\nRSI · MACD · Bollinger\nSMA Cross · Volume · Momentum"]
+            S2["Fundamental Score\nP/E · P/B · ROE · D/E\nGrowth · Margin"]
+            S3["Momentum Score\n1M · 3M · 6M price return"]
+            S4["Composite Score\nweighted sum  →  0 – 100"]
+            S1 --> S2 --> S3 --> S4
+        end
+
+        K["Rank all 2,117 stocks\nsort by composite score ↓\ntake top-N candidates"]
+        L["Generate Signals\nscore ≥ 70  →  BUY\nscore  &lt; 40  →  SELL\nelse       →  HOLD"]
+    end
+
+    subgraph RISK ["🛡️  RISK GATE"]
+        R1{"BUY\nsignal?"}
+        R2{"holdings\n&lt; max 10?"}
+        R3{"daily loss\n≤ ₹1,000?"}
+        R4{"SELL\nsignal?"}
+        R5{"currently\nholding stock?"}
+        R6{"daily loss\n≤ ₹1,000?"}
+        SKIP1(["⊘ Skip"]):::skip
+        SKIP2(["⊘ Skip"]):::skip
+        SKIP3(["⊘ Skip"]):::skip
+        SKIP4(["⊘ Skip"]):::skip
+    end
+
+    subgraph EXECUTE ["📤  ORDER EXECUTION"]
+        O1["Place BUY order"]
+        O2["Place SELL order"]
+        DR{"dry_run\n= True?"}
+        LOG["Log only\nno real trade"]
+        API["Groww API\nplace_order(...)"]
+        POS["Update PositionTracker\nLog session P&L"]
+        SLEEP["Sleep 300 s"]
+    end
+
+    END_NODE(["⏹ Ctrl-C / Error"]):::terminal
+    SHUTDOWN["on_stop() hook\nprint orders · print P&L"]
+
+    %% Startup flow
+    START --> A --> B
+    B -->|Yes| C --> E
+    B -->|No| D --> E
+    E --> F
+    F -->|Yes| H
+    F -->|No| G --> H
+    H --> LOOP
+
+    %% Loop flow
+    I --> J --> SCORING --> K --> L --> RISK
+
+    %% Risk gate — BUY path
+    L --> R1
+    R1 -->|Yes| R2
+    R1 -->|No| R4
+    R2 -->|No| SKIP1
+    R2 -->|Yes| R3
+    R3 -->|No| SKIP2
+    R3 -->|Yes| O1
+
+    %% Risk gate — SELL path
+    R4 -->|Yes| R5
+    R4 -->|No| SLEEP
+    R5 -->|No| SKIP3
+    R5 -->|Yes| R6
+    R6 -->|No| SKIP4
+    R6 -->|Yes| O2
+
+    %% Execution
+    O1 --> DR
+    O2 --> DR
+    DR -->|Yes| LOG --> POS
+    DR -->|No| API --> POS
+    POS --> SLEEP
+    SLEEP -->|next tick| I
+
+    %% Shutdown
+    SLEEP -.->|interrupted| END_NODE
+    END_NODE --> SHUTDOWN
+
+    %% Styles
+    classDef terminal fill:#2d2d2d,color:#fff,stroke:#888,rx:20
+    classDef skip fill:#5c1a1a,color:#ffaaaa,stroke:#c0392b
+    style STARTUP fill:#0d1b2a,stroke:#4a90d9,color:#fff
+    style LOOP fill:#0d2018,stroke:#2ecc71,color:#fff
+    style SCORING fill:#0a1a10,stroke:#27ae60,color:#ccc
+    style RISK fill:#1e1020,stroke:#9b59b6,color:#fff
+    style EXECUTE fill:#1a0d0d,stroke:#e74c3c,color:#fff
 ```
 
 ---
