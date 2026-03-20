@@ -131,10 +131,17 @@ class ScoreBasedStrategy(BaseStrategy):
                 continue  # already holding or pending
             if len(effective_holdings) + len(signals) >= self.config.max_holdings:
                 break     # at capacity
+
+            # open_slots = remaining capacity across holdings + already queued signals
+            open_slots = self.config.max_holdings - len(effective_holdings) - len(signals)
+            qty = self.orders.compute_quantity(candidate.symbol, open_slots)
+            if qty < 1:
+                continue  # can't afford even 1 share — skip
+
             signals.append(TradeSignal(
                 symbol=candidate.symbol,
                 signal=Signal.BUY,
-                quantity=self.config.quantity_per_trade,
+                quantity=qty,
                 reason=f"score={candidate.composite:.1f} (tech={candidate.technical:.0f} "
                        f"fund={candidate.fundamental:.0f} mom={candidate.momentum:.0f})",
             ))

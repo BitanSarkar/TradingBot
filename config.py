@@ -63,6 +63,15 @@ class Config:
     max_quantity_per_order: int   = field(default_factory=lambda: _int  ("RISK_MAX_QTY_PER_ORDER", 10))
     quantity_per_trade:     int   = field(default_factory=lambda: _int  ("RISK_QUANTITY_PER_TRADE",1))
 
+    # ── Position Sizing ───────────────────────────────────────────────────────
+    # deploy_fraction: fraction of available CNC balance to spread across holdings
+    #   e.g. 0.90 → use 90% of wallet, keep 10% as buffer
+    # If dynamic sizing is disabled (RISK_DYNAMIC_SIZING=false), falls back to
+    # quantity_per_trade (static qty).
+    dynamic_sizing:    bool  = field(default_factory=lambda: _bool ("RISK_DYNAMIC_SIZING",    True))
+    deploy_fraction:   float = field(default_factory=lambda: _float("RISK_DEPLOY_FRACTION",   0.90))
+    dry_run_balance:   float = field(default_factory=lambda: _float("RISK_DRY_RUN_BALANCE", 100000.0))
+
     # ── Signal Thresholds ─────────────────────────────────────────────────────
     score_buy_threshold:  float = field(default_factory=lambda: _float("SCORE_BUY_THRESHOLD",  70.0))
     score_sell_threshold: float = field(default_factory=lambda: _float("SCORE_SELL_THRESHOLD", 40.0))

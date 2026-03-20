@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -42,6 +43,80 @@ class OrderManager:
         price: float = 0.0,
     ) -> Optional[str]:
         return self._place(symbol, quantity, "SELL", order_type, price)
+
+    def available_balance(self) -> float:
+        """Return available CNC (delivery) cash balance from Groww wallet.
+        Returns 0.0 on error or in dry-run mode (caller must handle gracefully)."""
+        if self._config.dry_run:
+            # In dry-run, return a large fake balance so sizing math still works
+            return float(self._config.dry_run_balance)
+        try:
+            margin = self._client.get_available_margin_details()
+            equity = margin.get("equity", {}) or {}
+            return float(equity.get("cnc_balance_available", 0.0))
+        except Exception as exc:
+            self.log.warning("Could not fetch wallet balance: %s — defaulting to 0", exc)
+            return 0.0
+
+    def compute_quantity(self, symbol: str, open_slots: int) -> int:
+        """
+        Compute how many shares to buy for `symbol` given current wallet balance.
+
+        Logic:
+          capital_per_trade = (balance × deploy_fraction) / open_slots
+          qty = floor(capital_per_trade / ltp)
+
+        Falls back to config.quantity_per_trade if:
+          - dynamic_sizing is disabled
+          - balance is 0 or LTP fetch fails
+          - computed qty < 1 (can't afford even one share)
+        """
+        if not self._config.dynamic_sizing:
+            return self._config.quantity_per_trade
+
+        balance = self.available_balance()
+        if balance <= 0:
+            self.log.warning("%s: wallet balance is ₹0 — skipping dynamic sizing", symbol)
+            return self._config.quantity_per_trade
+
+        slots = max(1, open_slots)
+        capital_per_trade = (balance * self._config.deploy_fraction) / slots
+
+        ltp = self._fetch_ltp(symbol)
+        if ltp is None or ltp <= 0:
+            self.log.warning("%s: could not fetch LTP — falling back to static qty", symbol)
+            return self._config.quantity_per_trade
+
+        qty = math.floor(capital_per_trade / ltp)
+        if qty < 1:
+            self.log.warning(
+                "%s: LTP ₹%.2f exceeds per-trade capital ₹%.2f — skipping",
+                symbol, ltp, capital_per_trade,
+            )
+            return 0   # caller should skip this signal
+
+        qty = min(qty, self._config.max_quantity_per_order)
+        self.log.info(
+            "%s: balance=₹%.0f  slots=%d  capital/trade=₹%.0f  LTP=₹%.2f  → qty=%d",
+            symbol, balance, slots, capital_per_trade, ltp, qty,
+        )
+        return qty
+
+    def _fetch_ltp(self, symbol: str) -> Optional[float]:
+        """Fetch last traded price for a single NSE equity symbol."""
+        if self._config.dry_run:
+            return None   # dry-run: no live price, caller falls back to static qty
+        try:
+            key = f"NSE_{symbol}"
+            result = self._client.get_ltp(
+                exchange_trading_symbols=(key,),
+                segment=self._client.SEGMENT_CASH,
+                timeout=5,
+            )
+            return float(result.get(key, 0)) or None
+        except Exception as exc:
+            self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
+            return None
 
     def get_order_status(self, order_id: str) -> Optional[dict]:
         if self._config.dry_run:
