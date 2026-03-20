@@ -51,8 +51,16 @@ def main():
 
     # ── 0. Pre-flight check ────────────────────────────────────────────────
     step("Pre-flight: checking imports")
+
+    # Only require packages actually needed for the requested mode
+    required = ["nselib", "pandas", "numpy", "requests"]
+    if run_all or args.ohlcv or args.fundamentals:
+        required += ["pyarrow"]
+    if run_all or args.ohlcv:
+        required += ["nsepy"]
+
     missing = []
-    for pkg in ["nselib", "nsepy", "pandas", "numpy", "pyarrow", "requests"]:
+    for pkg in required:
         try:
             __import__(pkg)
             print(f"  ✅  {pkg}")
