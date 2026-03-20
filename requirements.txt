@@ -1,0 +1,11 @@
+growwapi>=0.0.8
+
+# NSE data sources
+nselib>=2.0.0
+nsepy>=0.8.2
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.26.0
+requests>=2.31.0
+pyarrow>=15.0.0     # parquet caching

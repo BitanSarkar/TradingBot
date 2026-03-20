@@ -1,0 +1,168 @@
+"""
+strategies/score_based.py — Score-based trading strategy.
+
+How it works
+------------
+On every tick:
+  1. Refresh stale market data (OHLCV + fundamentals) from yfinance.
+  2. Run the ScoringEngine on the entire stock universe.
+  3. Any stock with composite score >= BUY_THRESHOLD that you don't hold → BUY.
+  4. Any stock you hold whose score drops below SELL_THRESHOLD → SELL.
+  5. Never hold more than MAX_HOLDINGS stocks simultaneously.
+
+Thresholds are fully configurable in Config (or overridden at runtime).
+
+This file intentionally has NO hard-coded alpha — the scoring registry
+is where the "intelligence" lives, and you control it.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from strategies.base import BaseStrategy, Signal, TradeSignal
+
+if TYPE_CHECKING:
+    from scoring.engine import ScoringEngine
+    from universe import StockUniverse
+    from data.fetcher import DataFetcher
+    from config import Config
+    from orders import OrderManager
+    from positions import PositionTracker
+
+log = logging.getLogger("ScoreBasedStrategy")
+
+
+class ScoreBasedStrategy(BaseStrategy):
+    """
+    Parameters (all in Config)
+    --------------------------
+    score_buy_threshold  : float  — minimum composite score to trigger BUY  (default 70)
+    score_sell_threshold : float  — composite score below which we SELL      (default 40)
+    max_holdings         : int    — max simultaneous stock positions          (default 10)
+    quantity_per_trade   : int    — fixed qty per order (1 = safe start)      (default 1)
+    score_top_n          : int    — only consider top-N scored stocks for buy (default 50)
+    """
+
+    def __init__(
+        self,
+        config: "Config",
+        orders: "OrderManager",
+        positions: "PositionTracker",
+        universe: "StockUniverse",
+        fetcher: "DataFetcher",
+        engine: "ScoringEngine",
+    ) -> None:
+        super().__init__(config, orders, positions)
+        self._universe = universe
+        self._fetcher  = fetcher
+        self._engine   = engine
+
+        # Expose last scores for debugging / reporting
+        self.last_scores: list = []
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def on_start(self) -> None:
+        self.log.info("ScoreBasedStrategy starting.")
+        self.log.info("Universe size : %d symbols", self._universe.size())
+        self.log.info("Buy threshold : %.0f", self.config.score_buy_threshold)
+        self.log.info("Sell threshold: %.0f", self.config.score_sell_threshold)
+        self.log.info("Max holdings  : %d",   self.config.max_holdings)
+
+        # Initial data refresh (may take a few minutes for large universe)
+        self.log.info("Initial data refresh — this may take a while...")
+        self._fetcher.refresh(self._universe.all_symbols())
+        self.log.info("Data ready. Bot is live.")
+
+    def on_stop(self) -> None:
+        self.log.info("Shutdown — squaring off all open positions.")
+        for pos in self.positions.all_open():
+            self.orders.sell(pos.symbol, pos.quantity, reason="shutdown square-off")
+
+    # ------------------------------------------------------------------
+    # Core tick
+    # ------------------------------------------------------------------
+
+    def generate_signals(self) -> list[TradeSignal]:
+        symbols = self._universe.all_symbols()
+
+        # Refresh stale data only
+        self._fetcher.refresh(symbols)
+
+        # Score everything
+        scores = self._engine.run(symbols)
+        self.last_scores = scores
+
+        # Log top 5 / bottom 5
+        self._log_scores(scores)
+
+        signals: list[TradeSignal] = []
+
+        # ---- BUY candidates (top-N scoring stocks) ----
+        buy_candidates = [
+            s for s in scores[: self.config.score_top_n]
+            if s.composite >= self.config.score_buy_threshold
+        ]
+        open_positions = {p.symbol for p in self.positions.all_open()}
+
+        for candidate in buy_candidates:
+            if candidate.symbol in open_positions:
+                continue  # already holding
+            if len(open_positions) + len(signals) >= self.config.max_holdings:
+                break     # at capacity
+            signals.append(TradeSignal(
+                symbol=candidate.symbol,
+                signal=Signal.BUY,
+                quantity=self.config.quantity_per_trade,
+                reason=f"score={candidate.composite:.1f} (tech={candidate.technical:.0f} "
+                       f"fund={candidate.fundamental:.0f} mom={candidate.momentum:.0f})",
+            ))
+
+        # ---- SELL candidates (held stocks whose score dropped) ----
+        score_map = {s.symbol: s for s in scores}
+        for pos in self.positions.all_open():
+            stock_score = score_map.get(pos.symbol)
+            if stock_score is None:
+                continue
+            if stock_score.composite < self.config.score_sell_threshold:
+                signals.append(TradeSignal(
+                    symbol=pos.symbol,
+                    signal=Signal.SELL,
+                    quantity=pos.quantity,
+                    reason=f"score dropped to {stock_score.composite:.1f} "
+                           f"(threshold={self.config.score_sell_threshold})",
+                ))
+
+        self.log.info(
+            "Signals this tick: %d BUY, %d SELL",
+            sum(1 for s in signals if s.signal == Signal.BUY),
+            sum(1 for s in signals if s.signal == Signal.SELL),
+        )
+        return signals
+
+    # ------------------------------------------------------------------
+    # Reporting helpers
+    # ------------------------------------------------------------------
+
+    def _log_scores(self, scores: list) -> None:
+        if not scores:
+            return
+        top    = scores[:5]
+        bottom = scores[-5:]
+        self.log.info("── Top 5 ──")
+        for s in top:
+            self.log.info("  %-12s  %s  composite=%.1f", s.symbol, s.sector, s.composite)
+        self.log.info("── Bottom 5 ──")
+        for s in bottom:
+            self.log.info("  %-12s  %s  composite=%.1f", s.symbol, s.sector, s.composite)
+
+    def print_score_table(self, n: int = 20) -> None:
+        """Pretty-print the top-N scores (call from REPL for debugging)."""
+        df = self._engine.to_dataframe(self.last_scores[:n])
+        if not df.empty:
+            print(df[["symbol", "sector", "composite", "technical", "fundamental", "momentum"]]
+                  .to_string())

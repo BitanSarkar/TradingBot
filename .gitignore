@@ -1,0 +1,36 @@
+# ── Credentials (NEVER commit these) ──────────────────────────────────────
+.env
+.env.*
+secrets.json
+credentials.json
+
+# ── Virtual Environment ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Bot Runtime Artifacts (auto-generated — run `python bootstrap.py`) ──────
+# NSE stock universe + sector map
+# Per-symbol OHLCV parquet files (~1 GB for all NSE stocks)
+# Per-symbol fundamental JSON files
+cache/
+
+# Rotating bot.log files
+logs/
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── IDEs ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
