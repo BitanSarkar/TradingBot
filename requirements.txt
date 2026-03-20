@@ -15,6 +15,7 @@ numpy>=1.26.0
 requests>=2.31.0
 urllib3>=2.0.0          # used directly for Retry + HTTPAdapter pool tuning
 pyarrow>=15.0.0         # pandas parquet backend (data/cache.py)
+yfinance>=0.2.0         # OHLCV fallback when nselib fails (Yahoo Finance NSE mirror)
 
 # News & sentiment
 feedparser>=6.0.0

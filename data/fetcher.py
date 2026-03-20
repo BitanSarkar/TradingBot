@@ -1,17 +1,18 @@
 """
 data/fetcher.py — OHLCV + fundamentals fetcher
 
-Primary source  : nselib  (capital_market.price_volume_and_deliverable_position_data)
-Fallback source : nsepy   (get_history)
-
-Why two sources?
-  nselib is the authoritative NSE data feed.
-  nsepy is used when nselib times out / returns empty.
+Source priority for historical OHLCV (tried in order, first success wins):
+  1. nselib  — capital_market.price_volume_and_deliverable_position_data()
+               (authoritative NSE feed; broken when NSE changes column names)
+  2. yfinance — yf.download("SYMBOL.NS", ...)
+               (Yahoo Finance NSE mirror; reliable, works from any IP including EC2)
+  3. nsepy   — get_history()
+               (broken on Python 3.14 due to FrameLocalsProxy; kept as last resort)
 
 Threading
 ---------
-Both libraries are single-symbol APIs, so we parallelise across a
-ThreadPoolExecutor.  Concurrency is capped to avoid hammering NSE.
+All three are single-symbol APIs — parallelised across a ThreadPoolExecutor.
+Concurrency capped to avoid hammering NSE / Yahoo rate limits.
 
 Public API
 ----------
@@ -103,6 +104,23 @@ def _normalise_nsepy(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns=rename)
     keep = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
     df   = df[keep].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+    df.sort_index(inplace=True)
+    return df
+
+
+def _normalise_yfinance(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    yfinance.download() for a single symbol returns MultiIndex columns:
+        ('Close', 'SYMBOL.NS'), ('High', 'SYMBOL.NS'), ...
+    Flatten to: Open, High, Low, Close, Volume with DatetimeIndex.
+    """
+    if isinstance(df.columns, pd.MultiIndex):
+        # ('Close', 'RELIANCE.NS') → 'Close'
+        df.columns = [c[0] for c in df.columns]
+    keep = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
+    df   = df[keep].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+    df.index = pd.to_datetime(df.index)
+    df.index.name = "Date"
     df.sort_index(inplace=True)
     return df
 
@@ -335,7 +353,12 @@ class DataFetcher:
         return success, fail
 
     def _fetch_ohlcv_one(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetch OHLCV for a single symbol: nselib first, nsepy as fallback."""
+        """
+        Fetch OHLCV for a single symbol.  Source priority:
+          1. nselib  — fast, authoritative; fails when NSE changes column names
+          2. yfinance — reliable Yahoo Finance NSE mirror; works from EC2 / any IP
+          3. nsepy   — last resort; broken on Python 3.14+
+        """
         today   = date.today()
         from_dt = today - timedelta(days=_LOOKBACK_DAYS)
 
@@ -347,7 +370,15 @@ class DataFetcher:
         except Exception as exc:
             log.debug("[nselib] %s: %s", symbol, exc)
 
-        # Method 2: nsepy fallback
+        # Method 2: yfinance (Yahoo Finance NSE mirror — "SYMBOL.NS")
+        try:
+            df = self._yfinance_ohlcv(symbol, from_dt, today)
+            if df is not None and not df.empty:
+                return df
+        except Exception as exc:
+            log.debug("[yfinance] %s: %s", symbol, exc)
+
+        # Method 3: nsepy (broken on Python 3.14 but kept for older environments)
         try:
             df = self._nsepy_ohlcv(symbol, from_dt, today)
             if df is not None and not df.empty:
@@ -367,6 +398,21 @@ class DataFetcher:
         if df is None or df.empty:
             return None
         return _normalise_nselib(df)
+
+    def _yfinance_ohlcv(self, symbol: str, from_dt: date, to_dt: date) -> Optional[pd.DataFrame]:
+        """Yahoo Finance via yfinance — appends '.NS' for NSE symbols."""
+        import yfinance as yf
+        ticker = f"{symbol}.NS"
+        df = yf.download(
+            ticker,
+            start=from_dt.isoformat(),
+            end=to_dt.isoformat(),
+            progress=False,
+            auto_adjust=True,
+        )
+        if df is None or df.empty:
+            return None
+        return _normalise_yfinance(df)
 
     def _nsepy_ohlcv(self, symbol: str, from_dt: date, to_dt: date) -> Optional[pd.DataFrame]:
         from nsepy import get_history
