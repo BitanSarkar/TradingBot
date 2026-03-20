@@ -11,10 +11,11 @@ venv/
 env/
 
 # ── Bot Runtime Artifacts (auto-generated — run `python bootstrap.py`) ──────
-# NSE stock universe + sector map
 # Per-symbol OHLCV parquet files (~1 GB for all NSE stocks)
 # Per-symbol fundamental JSON files
 cache/
+# Universe cache is tracked in git so EC2 gets it via git pull (NSE blocks EC2 IPs)
+!cache/universe.json
 
 # Rotating bot.log files
 logs/
