@@ -27,6 +27,7 @@ Customise scoring
 
 from __future__ import annotations
 
+import signal
 import time
 
 from config import Config
@@ -175,6 +176,11 @@ class TradingBot:
         log.info("=" * 55)
 
         self._running = True
+
+        # Graceful shutdown on SIGTERM (sent by EC2 stop / systemd stop)
+        # Without this, Python terminates immediately and _shutdown() never runs.
+        signal.signal(signal.SIGTERM, lambda *_: self.stop())
+
         self.strategy.on_start()
 
         try:
