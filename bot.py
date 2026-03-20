@@ -156,6 +156,11 @@ class TradingBot:
     # Track whether we've already done the EOD refresh this session
     _eod_refreshed_today: str = ""   # stores "YYYY-MM-DD" of last EOD refresh
 
+    # Broker re-sync counter — re-syncs holdings from Groww every N ticks
+    # so manual trades or transfers done outside the bot stay in sync
+    _BROKER_SYNC_EVERY = 10   # re-sync every 10 ticks (~10 min at default interval)
+    _tick_count: int = 0
+
     def start(self) -> None:
         mode = "DRY RUN" if self.config.dry_run else "⚠️  LIVE TRADING"
         log.info("=" * 55)
@@ -225,9 +230,18 @@ class TradingBot:
 
     def _tick(self, force_refresh: bool = False) -> None:
         import time as _time
+        self._tick_count += 1
         state = market_state()
         label = {"open": "OPEN", "eod_window": "EOD", "closed": "CLOSED"}.get(state, state)
-        log.info("─" * 36 + f"  tick [{label}]  " + "─" * 36)
+        log.info("─" * 36 + f"  tick [{label}] #{self._tick_count}  " + "─" * 36)
+
+        # Re-sync holdings from Groww every N ticks so manual trades
+        # done outside the bot (e.g. in the Groww app) stay reflected here
+        pos = self.strategy.positions
+        if self._tick_count % self._BROKER_SYNC_EVERY == 0:
+            log.info("Re-syncing holdings from Groww (tick #%d)...", self._tick_count)
+            pos.refresh_from_broker()
+
         t0 = _time.monotonic()
         try:
             signals = self.strategy.generate_signals(force_refresh=force_refresh)
@@ -237,6 +251,9 @@ class TradingBot:
 
         elapsed = _time.monotonic() - t0
         log.info("Tick completed in %.1fs — %d signal(s) generated.", elapsed, len(signals))
+
+        # Print portfolio snapshot after every tick
+        pos.print_portfolio(self.strategy.fetcher)
 
         for sig in signals:
             if sig.signal is Signal.HOLD:
@@ -310,6 +327,7 @@ def build_bot() -> TradingBot:
 
     orders    = OrderManager(groww_client, config)
     positions = PositionTracker(groww_client, config)
+    positions.refresh_from_broker()   # seed local state from your real Groww account
     cache     = DataCache()
     fetcher   = DataFetcher(cache)
     universe  = StockUniverse()

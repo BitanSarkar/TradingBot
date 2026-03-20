@@ -59,6 +59,11 @@ class ScoreBasedStrategy(BaseStrategy):
         self._fetcher  = fetcher
         self._engine   = engine
 
+    @property
+    def fetcher(self) -> "DataFetcher":
+        """Expose fetcher so TradingBot can pass it to print_portfolio()."""
+        return self._fetcher
+
         # Expose last scores for debugging / reporting
         self.last_scores: list = []
 
