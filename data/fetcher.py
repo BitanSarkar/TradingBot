@@ -644,9 +644,11 @@ class DataFetcher:
 
     def _fetch_fund_one(self, symbol: str) -> dict:
         """
-        Pull P/E, P/B, EPS, market cap, ROE from NSE's equity quote API.
-        Returns {} if unavailable — scoring degrades gracefully (technical only).
+        Pull P/E, P/B, EPS, market cap, ROE.
+        Tries NSE quote API first; falls back to yfinance Ticker.info.
+        Returns {} if both sources fail — scoring degrades to technical only.
         """
+        # ── Method 1: NSE quote API ───────────────────────────────────────
         try:
             session = self._get_nse_session()
             url  = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
@@ -654,23 +656,43 @@ class DataFetcher:
             resp.raise_for_status()
             data = resp.json()
 
-            if not isinstance(data, dict):
+            if isinstance(data, dict):
+                metadata = data.get("metadata", {}) or {}
+                price    = data.get("priceInfo",  {}) or {}
+                fin      = data.get("financialData", {}) or {}
+
+                result = {
+                    "pe":         metadata.get("pdSymbolPe"),
+                    "pb":         metadata.get("pdPb"),
+                    "eps":        metadata.get("eps"),
+                    "market_cap": metadata.get("marketCap"),
+                    "52w_high":   price.get("weekHighLow", {}).get("max"),
+                    "52w_low":    price.get("weekHighLow", {}).get("min"),
+                    "roe":        fin.get("returnOnEquity"),
+                    "div_yield":  fin.get("dividendYield"),
+                }
+                if result.get("pe") is not None:
+                    return result
+        except Exception:
+            pass
+
+        # ── Method 2: yfinance Ticker.info ───────────────────────────────
+        try:
+            import yfinance as yf
+            info = yf.Ticker(f"{symbol}.NS").info
+            if not info:
                 return {}
-
-            metadata = data.get("metadata", {}) or {}
-            price    = data.get("priceInfo",  {}) or {}
-            fin      = data.get("financialData", {}) or {}
-
+            pe = info.get("trailingPE") or info.get("forwardPE")
             result = {
-                "pe":         metadata.get("pdSymbolPe"),
-                "eps":        metadata.get("eps"),
-                "market_cap": metadata.get("marketCap"),
-                "52w_high":   price.get("weekHighLow", {}).get("max"),
-                "52w_low":    price.get("weekHighLow", {}).get("min"),
-                "roe":        fin.get("returnOnEquity"),
-                "div_yield":  fin.get("dividendYield"),
+                "pe":         pe,
+                "pb":         info.get("priceToBook"),
+                "eps":        info.get("trailingEps"),
+                "market_cap": info.get("marketCap"),
+                "52w_high":   info.get("fiftyTwoWeekHigh"),
+                "52w_low":    info.get("fiftyTwoWeekLow"),
+                "roe":        info.get("returnOnEquity"),
+                "div_yield":  info.get("dividendYield"),
             }
-            # Only count as success if at least P/E was populated
-            return result if result.get("pe") is not None else {}
+            return result if pe is not None else {}
         except Exception:
             return {}
