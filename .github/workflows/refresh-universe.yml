@@ -2,7 +2,9 @@ name: Refresh Universe Cache
 
 on:
   schedule:
-    - cron: "0 2 * * 1"   # Every Monday at 2:00 AM UTC (7:30 AM IST)
+    # Every hour, Mon–Fri, OUTSIDE NSE market hours (9:15–15:30 IST = 03:45–10:00 UTC)
+    # Runs at UTC 00–03 (IST 05:30–09:30) and UTC 10–23 (IST 15:30–05:30 next day)
+    - cron: "0 0-3,10-23 * * 1-5"
   workflow_dispatch:        # Also allow manual trigger from GitHub UI
 
 permissions:
