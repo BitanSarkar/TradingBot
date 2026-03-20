@@ -1,0 +1,34 @@
+name: Refresh Universe Cache
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"   # Every Monday at 2:00 AM UTC (7:30 AM IST)
+  workflow_dispatch:        # Also allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install nselib requests pandas numpy
+
+      - name: Refresh universe cache
+        run: python bootstrap.py --universe
+        # nselib works fine from GitHub Actions IPs (not blocked by NSE)
+
+      - name: Commit updated universe.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f cache/universe.json
+          git diff --cached --quiet || git commit -m "chore: auto-refresh universe cache [skip ci]"
+          git push
