@@ -142,6 +142,33 @@ class DataFetcher:
             log.info("Refreshing fundamentals for %d symbols…", len(stale_fund))
             self._parallel_fetch_fundamentals(stale_fund)
 
+    def batch_refresh(self, symbols: list[str], force: bool = False) -> tuple[int, int]:
+        """
+        OHLCV-only refresh used by bootstrap.py for Step 2.
+        Returns (ok_count, failed_count).
+        """
+        stale = symbols if force else self._cache.stale_ohlcv_symbols(symbols)
+        if not stale:
+            log.info("All OHLCV caches are fresh — nothing to download.")
+            return len(symbols), 0
+        log.info(
+            "batch_refresh: %d symbols to fetch (nselib → nsepy, %d threads)…",
+            len(stale), _MAX_WORKERS,
+        )
+        return self._parallel_fetch_ohlcv(stale)
+
+    def refresh_fundamentals(self, symbols: list[str], force: bool = False) -> int:
+        """
+        Fundamentals-only refresh used by bootstrap.py for Step 3.
+        Returns the number of symbols successfully updated.
+        """
+        stale = symbols if force else self._cache.stale_fund_symbols(symbols)
+        if not stale:
+            log.info("All fundamental caches are fresh — nothing to download.")
+            return 0
+        log.info("refresh_fundamentals: %d symbols to fetch…", len(stale))
+        return self._parallel_fetch_fundamentals(stale)
+
     # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
@@ -278,7 +305,8 @@ class DataFetcher:
     # OHLCV — parallel workers
     # ------------------------------------------------------------------
 
-    def _parallel_fetch_ohlcv(self, symbols: list[str]) -> None:
+    def _parallel_fetch_ohlcv(self, symbols: list[str]) -> tuple[int, int]:
+        """Returns (ok_count, failed_count)."""
         success = fail = done = 0
         total = len(symbols)
         _PROGRESS_EVERY = max(1, min(200, total // 10))   # log every ~10% or 200 symbols
@@ -304,6 +332,7 @@ class DataFetcher:
                         done, total, pct, success, fail,
                     )
         log.info("OHLCV refresh done: %d ok / %d failed.", success, fail)
+        return success, fail
 
     def _fetch_ohlcv_one(self, symbol: str) -> Optional[pd.DataFrame]:
         """Fetch OHLCV for a single symbol: nselib first, nsepy as fallback."""
@@ -350,7 +379,8 @@ class DataFetcher:
     # Fundamentals — NSE equity info API (weekly refresh)
     # ------------------------------------------------------------------
 
-    def _parallel_fetch_fundamentals(self, symbols: list[str]) -> None:
+    def _parallel_fetch_fundamentals(self, symbols: list[str]) -> int:
+        """Returns ok_count (number of symbols with data saved)."""
         success = done = 0
         total = len(symbols)
         _PROGRESS_EVERY = max(1, min(200, total // 10))
@@ -372,6 +402,7 @@ class DataFetcher:
                         done, total, done / total * 100, success,
                     )
         log.info("Fundamentals refresh: %d/%d updated.", success, len(symbols))
+        return success
 
     # ------------------------------------------------------------------ #
     # Shared NSE session — one session for the whole process             #
