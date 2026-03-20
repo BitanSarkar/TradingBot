@@ -122,12 +122,15 @@ class ScoreBasedStrategy(BaseStrategy):
             s for s in scores[: self.config.score_top_n]
             if s.composite >= self.config.score_buy_threshold
         ]
-        open_positions = {p.symbol for p in self.positions.all_open()}
+        # effective_holdings = confirmed positions + pending BUY orders
+        # This prevents generating a second BUY signal for a stock that was
+        # just ordered but not yet filled (T+1 settlement / pending order)
+        effective_holdings = self.positions.effective_holdings()
 
         for candidate in buy_candidates:
-            if candidate.symbol in open_positions:
-                continue  # already holding
-            if len(open_positions) + len(signals) >= self.config.max_holdings:
+            if candidate.symbol in effective_holdings:
+                continue  # already holding or pending
+            if len(effective_holdings) + len(signals) >= self.config.max_holdings:
                 break     # at capacity
             signals.append(TradeSignal(
                 symbol=candidate.symbol,

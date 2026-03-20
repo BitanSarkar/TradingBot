@@ -242,6 +242,10 @@ class TradingBot:
             log.info("Re-syncing holdings from Groww (tick #%d)...", self._tick_count)
             pos.refresh_from_broker()
 
+        # Poll fill status for all pending orders BEFORE generating new signals.
+        # This ensures positions are up-to-date and idempotency checks are current.
+        pos.sync_pending_orders(self.strategy.orders)
+
         t0 = _time.monotonic()
         try:
             signals = self.strategy.generate_signals(force_refresh=force_refresh)
@@ -270,28 +274,62 @@ class TradingBot:
         if sig.signal is Signal.BUY:
             log.info("BUY  %-12s  qty=%-3d  reason: %s", sig.symbol, sig.quantity, sig.reason)
             order_id = orders.buy(sig.symbol, sig.quantity, sig.order_type, sig.price)
-            if order_id and not self.config.dry_run:
-                pos.record_buy(sig.symbol, sig.quantity, sig.price)
+            if order_id:
+                if self.config.dry_run:
+                    # Dry-run: no real settlement, record immediately
+                    pos.record_buy(sig.symbol, sig.quantity, sig.price)
+                else:
+                    # Live: order is placed but not yet filled/settled
+                    # add_pending() prevents duplicate orders on next tick
+                    pos.add_pending(sig.symbol, order_id, "BUY",
+                                    sig.quantity, sig.price)
 
         elif sig.signal is Signal.SELL:
             log.info("SELL %-12s  qty=%-3d  reason: %s", sig.symbol, sig.quantity, sig.reason)
             order_id = orders.sell(sig.symbol, sig.quantity, sig.order_type, sig.price)
-            if order_id and not self.config.dry_run:
-                pos.record_sell(sig.symbol, sig.quantity, sig.price)
+            if order_id:
+                if self.config.dry_run:
+                    pos.record_sell(sig.symbol, sig.quantity, sig.price)
+                else:
+                    pos.add_pending(sig.symbol, order_id, "SELL",
+                                    sig.quantity, sig.price)
 
     def _passes_risk(self, sig) -> bool:
         pos = self.strategy.positions
 
+        # Hard stop: daily loss limit
         if pos.total_realized_pnl() <= -abs(self.config.max_daily_loss):
             log.warning("Daily loss limit hit. Signal for %s rejected.", sig.symbol)
             return False
 
-        if sig.signal is Signal.BUY and pos.count_open() >= self.config.max_holdings:
-            log.warning("Max holdings (%d) reached. BUY for %s rejected.",
-                        self.config.max_holdings, sig.symbol)
-            return False
+        if sig.signal is Signal.BUY:
+            # Idempotency: already have a pending or confirmed position for this symbol
+            if pos.has_pending(sig.symbol):
+                log.debug(
+                    "BUY for %s skipped — pending order already exists (order not yet filled).",
+                    sig.symbol,
+                )
+                return False
+
+            # Capacity: at max holdings (count confirmed + pending buys)
+            effective = len(pos.effective_holdings())
+            if effective >= self.config.max_holdings:
+                log.warning(
+                    "Max holdings (%d) reached (%d confirmed + pending). "
+                    "BUY for %s rejected.",
+                    self.config.max_holdings, effective, sig.symbol,
+                )
+                return False
 
         if sig.signal is Signal.SELL:
+            # Idempotency: don't sell something already being sold
+            if pos.has_pending(sig.symbol):
+                log.debug(
+                    "SELL for %s skipped — pending order already exists.",
+                    sig.symbol,
+                )
+                return False
+
             held = pos.get(sig.symbol).quantity
             if held == 0:
                 return False
