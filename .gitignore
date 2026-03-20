@@ -1,6 +1,7 @@
 # ── Credentials (NEVER commit these) ──────────────────────────────────────
 .env
 .env.*
+!.env.example
 secrets.json
 credentials.json
 

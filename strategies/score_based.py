@@ -67,6 +67,7 @@ class ScoreBasedStrategy(BaseStrategy):
     # ------------------------------------------------------------------
 
     def on_start(self) -> None:
+        import time as _time
         self.log.info("ScoreBasedStrategy starting.")
         self.log.info("Universe size : %d symbols", self._universe.size())
         self.log.info("Buy threshold : %.0f", self.config.score_buy_threshold)
@@ -74,9 +75,18 @@ class ScoreBasedStrategy(BaseStrategy):
         self.log.info("Max holdings  : %d",   self.config.max_holdings)
 
         # Initial data refresh (may take a few minutes for large universe)
-        self.log.info("Initial data refresh — this may take a while...")
+        self.log.info("━" * 55)
+        self.log.info("  Phase 1 of 1: Initial data refresh")
+        self.log.info("  Downloading OHLCV for %d stocks — please wait…", self._universe.size())
+        self.log.info("  (Progress will appear below every ~10%% of symbols)")
+        self.log.info("━" * 55)
+        t0 = _time.monotonic()
         self._fetcher.refresh(self._universe.all_symbols())
-        self.log.info("Data ready. Bot is live.")
+        elapsed = _time.monotonic() - t0
+        self.log.info("━" * 55)
+        self.log.info("  Data refresh complete in %.1f seconds.", elapsed)
+        self.log.info("  Bot is live — first tick starting NOW.")
+        self.log.info("━" * 55)
 
     def on_stop(self) -> None:
         self.log.info("Shutdown — squaring off all open positions.")
@@ -87,11 +97,11 @@ class ScoreBasedStrategy(BaseStrategy):
     # Core tick
     # ------------------------------------------------------------------
 
-    def generate_signals(self) -> list[TradeSignal]:
+    def generate_signals(self, force_refresh: bool = False) -> list[TradeSignal]:
         symbols = self._universe.all_symbols()
 
-        # Refresh stale data only
-        self._fetcher.refresh(symbols)
+        # force_refresh=True is set during the EOD window to pick up today's close
+        self._fetcher.refresh(symbols, force=force_refresh)
 
         # Score everything
         scores = self._engine.run(symbols)

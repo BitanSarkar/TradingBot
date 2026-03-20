@@ -1,11 +1,20 @@
 growwapi>=0.0.8
+python-dotenv>=1.0.0
 
 # NSE data sources
 nselib>=2.0.0
-nsepy>=0.8.2
+nsepy>=0.8
 
 # Data processing
 pandas>=2.0.0
 numpy>=1.26.0
 requests>=2.31.0
-pyarrow>=15.0.0     # parquet caching
+pyarrow>=15.0.0
+
+# News & sentiment
+feedparser>=6.0.0
+vaderSentiment>=3.3.2
+
+# FinBERT — financial-domain BERT sentiment model (~400 MB, one-time download)
+transformers>=4.40.0
+torch>=2.2.0
