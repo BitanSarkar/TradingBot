@@ -55,17 +55,16 @@ class ScoreBasedStrategy(BaseStrategy):
         engine: "ScoringEngine",
     ) -> None:
         super().__init__(config, orders, positions)
-        self._universe = universe
-        self._fetcher  = fetcher
-        self._engine   = engine
+        self._universe  = universe
+        self._fetcher   = fetcher
+        self._engine    = engine
+        # Stores the last scored list so print_score_table() / REPL can inspect it
+        self.last_scores: list = []
 
     @property
     def fetcher(self) -> "DataFetcher":
         """Expose fetcher so TradingBot can pass it to print_portfolio()."""
         return self._fetcher
-
-        # Expose last scores for debugging / reporting
-        self.last_scores: list = []
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -182,5 +181,8 @@ class ScoreBasedStrategy(BaseStrategy):
         """Pretty-print the top-N scores (call from REPL for debugging)."""
         df = self._engine.to_dataframe(self.last_scores[:n])
         if not df.empty:
-            print(df[["symbol", "sector", "composite", "technical", "fundamental", "momentum"]]
-                  .to_string())
+            cols = ["symbol", "sector", "composite", "technical", "fundamental", "momentum"]
+            # Show intraday_pulse column if the engine computed it this tick
+            if "comp_intraday_pulse" in df.columns:
+                cols.append("comp_intraday_pulse")
+            print(df[cols].to_string())

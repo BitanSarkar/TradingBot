@@ -9,10 +9,11 @@ NSE schedule (IST = UTC+5:30)
   After-hours        : 15:55 - 09:00 next day
 
 This module exposes:
-  • market_state()      → "open" | "eod_window" | "closed"
-  • is_market_open()    → bool
-  • is_eod_window()     → bool
-  • seconds_until_open()→ float (seconds until next market open)
+  • market_state()             → "open" | "eod_window" | "closed"
+  • is_market_open()           → bool
+  • is_eod_window()            → bool
+  • seconds_until_open()       → float (seconds until next market open)
+  • elapsed_market_fraction()  → float 0.0–1.0 (fraction of session elapsed)
 
 All comparisons are in IST.  No external dependencies.
 """
@@ -82,6 +83,40 @@ def seconds_until_open() -> float:
         candidate += timedelta(days=1)
 
     return max(0.0, (candidate - now).total_seconds())
+
+
+_MARKET_TOTAL_MINUTES: float = (
+    _CLOSE_TIME.hour * 60 + _CLOSE_TIME.minute
+) - (
+    _OPEN_TIME.hour * 60 + _OPEN_TIME.minute
+)  # 375 minutes  (09:15 → 15:30)
+
+
+def elapsed_market_fraction() -> float:
+    """
+    Returns the fraction of the regular NSE session elapsed today (0.0–1.0).
+
+      0.0 → at or before 09:15 IST  (session just opened)
+      1.0 → at or after  15:30 IST  (session closed / EOD window)
+
+    Used by IntraDayPulse to normalise intraday volume pace:
+        volume_pace = today_volume / (avg_daily_volume × elapsed_fraction)
+
+    Always returns 0.0 before the market opens on a given day so callers can
+    safely guard with ``if elapsed > 0.02`` before dividing.
+    """
+    now = _now_ist()
+    if now.weekday() >= 5:           # weekend → treat as closed
+        return 1.0
+    t = now.time()
+    if t < _OPEN_TIME:
+        return 0.0
+    if t >= _CLOSE_TIME:
+        return 1.0
+    now_minutes  = now.hour * 60 + now.minute + now.second / 60.0
+    open_minutes = _OPEN_TIME.hour * 60 + _OPEN_TIME.minute
+    elapsed      = now_minutes - open_minutes
+    return min(1.0, max(0.0, elapsed / _MARKET_TOTAL_MINUTES))
 
 
 def market_status_line() -> str:

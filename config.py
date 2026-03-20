@@ -203,3 +203,17 @@ class Config:
     sentiment_recency_decay:    float = field(default_factory=lambda: _float("SENTIMENT_RECENCY_DECAY",    0.05))
     sentiment_min_articles:     int   = field(default_factory=lambda: _int  ("SENTIMENT_MIN_ARTICLES",     2))
     sentiment_cache_minutes:    int   = field(default_factory=lambda: _int  ("SENTIMENT_CACHE_MINUTES",    30))
+
+    # ── IntraDayPulse — live price sensitivity during market hours ────────────
+    # Blended into every stock's composite ONLY during 09:15–15:30 IST.
+    # Uses the live candle injected by DataFetcher each tick.
+    #
+    # Formula (delta-based, identical to sentiment blender):
+    #   delta = (pulse - 50) / 50            # −1 to +1
+    #   boost = delta × weight × base        # proportional nudge
+    #   new   = base + boost                 # pulse=50 → no change
+    intraday_pulse_weight:     float = field(default_factory=lambda: _float("INTRADAY_PULSE_WEIGHT",     0.20))
+    intraday_w_day_return:     float = field(default_factory=lambda: _float("INTRADAY_W_DAY_RETURN",     0.35))
+    intraday_w_range_position: float = field(default_factory=lambda: _float("INTRADAY_W_RANGE_POSITION", 0.30))
+    intraday_w_volume_pace:    float = field(default_factory=lambda: _float("INTRADAY_W_VOLUME_PACE",    0.25))
+    intraday_w_open_distance:  float = field(default_factory=lambda: _float("INTRADAY_W_OPEN_DISTANCE",  0.10))

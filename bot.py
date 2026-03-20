@@ -392,8 +392,14 @@ def build_bot() -> TradingBot:
     )
     engine   = ScoringEngine(
         universe, fetcher, registry,
-        sentiment_scorer = news_scorer,
-        sentiment_weight = config.sentiment_composite_weight,  # 0.0 = disable
+        sentiment_scorer          = news_scorer,
+        sentiment_weight          = config.sentiment_composite_weight,  # 0.0 = disable
+        # IntraDayPulse — live price sensitivity during 09:15–15:30 IST
+        intraday_pulse_weight     = config.intraday_pulse_weight,
+        intraday_w_day_return     = config.intraday_w_day_return,
+        intraday_w_range_position = config.intraday_w_range_position,
+        intraday_w_volume_pace    = config.intraday_w_volume_pace,
+        intraday_w_open_distance  = config.intraday_w_open_distance,
     )
     strategy = ScoreBasedStrategy(
         config=config, orders=orders, positions=positions,

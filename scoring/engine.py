@@ -14,18 +14,23 @@ Two-pass scoring pipeline
 
 Composite Score Formula
 ───────────────────────
-  Without sentiment:
+  Without sentiment or intraday pulse:
     composite = sector_scorer.score()          → 0–100
 
-  With sentiment blended in:
-    composite = base_score × (1 - sentiment_weight)
-              + sentiment  × sentiment_weight
+  With sentiment blended in (Pass 2):
+    delta   = (sentiment − 50) / 50            # −1.0 to +1.0
+    boost   = delta × sentiment_weight × base
+    blended = base + boost
     Default sentiment_weight = 0.15  (15%)
 
-  The sentiment pillar acts as a SIGNAL AMPLIFIER:
-    • Strong positive news (score > 75) on an already-bullish setup → push score higher
-    • Strong negative news (score < 25) → suppress even technically bullish setups
-    • No news → neutral (50) → no impact on composite
+  With IntraDayPulse blended in (market hours only, inline in Pass 1):
+    delta   = (pulse − 50) / 50                # −1.0 to +1.0
+    boost   = delta × intraday_pulse_weight × base
+    blended = base + boost
+    Default intraday_pulse_weight = 0.20  (20%)
+
+  Both use the same delta formula: score = 50 → delta = 0 → no change.
+  Only stocks that are ACTUALLY moving intraday get a nudge.
 
 Usage
 -----
@@ -43,7 +48,9 @@ from typing import Optional
 
 import pandas as pd
 
+from market_hours import is_market_open
 from scoring.formulas.base import StockScore
+from scoring.formulas.intraday_pulse import IntraDayPulse
 from scoring.registry import ScoreRegistry
 
 log = logging.getLogger("ScoringEngine")
@@ -63,6 +70,12 @@ class ScoringEngine:
         sentiment_scorer=None,                  # NewsSentimentScorer | None
         sentiment_weight: float = 0.15,         # 0.0 = disable, 0.15 = default
         sentiment_top_n: int = _DEFAULT_SENTIMENT_N,  # only run news on top-N
+        # IntraDayPulse — live market-hours sensitivity (set 0.0 to disable)
+        intraday_pulse_weight:     float = 0.20,
+        intraday_w_day_return:     float = 0.35,
+        intraday_w_range_position: float = 0.30,
+        intraday_w_volume_pace:    float = 0.25,
+        intraday_w_open_distance:  float = 0.10,
     ) -> None:
         self._universe          = universe
         self._fetcher           = fetcher
@@ -72,10 +85,26 @@ class ScoringEngine:
         self._sentiment_weight  = sentiment_weight if sentiment_scorer else 0.0
         self._sentiment_top_n   = sentiment_top_n
 
+        # IntraDayPulse scorer (stateless — one instance, reused every tick)
+        self._intraday               = IntraDayPulse()
+        self._intraday_weight        = intraday_pulse_weight
+        self._intraday_w_day_return  = intraday_w_day_return
+        self._intraday_w_range       = intraday_w_range_position
+        self._intraday_w_volume      = intraday_w_volume_pace
+        self._intraday_w_open        = intraday_w_open_distance
+
         if sentiment_scorer:
             log.info(
                 "News sentiment enabled — weight=%.0f%%  (top-%d candidates only)",
                 self._sentiment_weight * 100, self._sentiment_top_n,
+            )
+        if intraday_pulse_weight > 0:
+            log.info(
+                "IntraDayPulse enabled — weight=%.0f%%  "
+                "(day_ret=%.0f%% range=%.0f%% vol=%.0f%% open=%.0f%%)",
+                intraday_pulse_weight * 100,
+                intraday_w_day_return * 100, intraday_w_range_position * 100,
+                intraday_w_volume_pace * 100, intraday_w_open_distance * 100,
             )
 
     # ------------------------------------------------------------------
@@ -227,7 +256,12 @@ class ScoringEngine:
     # ------------------------------------------------------------------
 
     def _score_one_no_sentiment(self, symbol: str) -> Optional[StockScore]:
-        """Technical + Fundamental + Momentum only. No network I/O."""
+        """
+        Technical + Fundamental + Momentum only. No network I/O.
+        IntraDayPulse is also blended here when the market is open — it reads
+        only cached OHLCV data (already in memory from get_ohlcv()), so there
+        is no additional I/O cost.
+        """
         symbol = symbol.upper()
         sector = self._universe.sector_of(symbol)
         df     = self._fetcher.get_ohlcv(symbol)
@@ -241,13 +275,55 @@ class ScoringEngine:
 
         scorer = self._registry.get(sector)
         try:
-            return scorer.score(symbol=symbol, sector=sector, df=df, fundamentals=fund)
+            stock_score = scorer.score(symbol=symbol, sector=sector, df=df, fundamentals=fund)
         except Exception as exc:
             log.warning("Scoring failed for %s: %s", symbol, exc)
             return StockScore(
                 symbol=symbol, sector=sector, composite=0.0,
                 components={"error": str(exc)},
             )
+
+        # ── IntraDayPulse blend (market hours only) ───────────────────────────
+        if self._intraday_weight > 0 and is_market_open():
+            self._blend_intraday(stock_score, df)
+
+        return stock_score
+
+    def _blend_intraday(self, stock_score: StockScore, df) -> None:
+        """
+        Mutates stock_score in-place — blends IntraDayPulse into composite.
+
+        Formula (delta-based, identical to sentiment blender):
+            pulse         = IntraDayPulse.compute(df)         → 0–100
+            delta         = (pulse − 50) / 50                 → −1.0 to +1.0
+            boost         = delta × intraday_weight × base
+            new_composite = base + boost
+
+        Key: pulse=50 (flat day, mid-range, on-pace) → delta=0 → no change.
+
+        Examples (base=68, weight=0.20):
+            pulse=75  (+1.5% day, near high, vol surge) → boost=+3.4 → 71.4 ✓
+            pulse=30  (−1.5% day, near low,  light vol) → boost=−8.2 → 59.8 ✗
+            pulse=50  (perfectly neutral)               → boost= 0.0 → 68.0 ~
+        """
+        try:
+            pulse_score, pulse_components = self._intraday.compute(
+                df,
+                w_day_return     = self._intraday_w_day_return,
+                w_range_position = self._intraday_w_range,
+                w_volume_pace    = self._intraday_w_volume,
+                w_open_distance  = self._intraday_w_open,
+            )
+            base  = stock_score.composite
+            delta = (pulse_score - 50.0) / 50.0          # −1.0 to +1.0
+            boost = delta * self._intraday_weight * base
+            stock_score.composite = round(
+                max(0.0, min(100.0, base + boost)), 2
+            )
+            stock_score.components["intraday_pulse"] = round(pulse_score, 2)
+            stock_score.components.update(pulse_components)
+        except Exception as exc:
+            log.debug("IntraDayPulse blend failed for %s: %s", stock_score.symbol, exc)
 
     def _blend_sentiment(self, stock_score: StockScore) -> None:
         """
