@@ -28,12 +28,28 @@ def get_logger(name: str = "TradingBot") -> logging.Logger:
         console.setFormatter(fmt)
         root.addHandler(console)
 
-        # ── File — DEBUG and above, rotates daily, keeps 7 days ──────────
+        # ── File — DEBUG and above, size-capped at 20 GB total ──────────────
+        #   Each file  : 1 GB   (LOG_MAX_BYTES)
+        #   Max backups: 19     (LOG_BACKUP_COUNT)   → 20 files × 1 GB = 20 GB cap
+        #
+        # When bot.log hits 1 GB it is renamed to bot.log.1, bot.log.2 … etc.
+        # Once bot.log.19 exists the oldest file is deleted automatically, so
+        # the logs/ folder never exceeds LOG_MAX_BYTES × (LOG_BACKUP_COUNT + 1).
+        import os
+        from logging.handlers import RotatingFileHandler
+
+        _MB = 1024 * 1024
+        _GB = 1024 * _MB
+        max_bytes    = int(os.getenv("LOG_MAX_BYTES",    1 * _GB))   # 1 GB per file
+        backup_count = int(os.getenv("LOG_BACKUP_COUNT", 19))        # 19 backups → 20 GB cap
+
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
-        from logging.handlers import TimedRotatingFileHandler
-        file_handler = TimedRotatingFileHandler(
-            log_dir / "bot.log", when="midnight", backupCount=7, encoding="utf-8"
+        file_handler = RotatingFileHandler(
+            log_dir / "bot.log",
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
         )
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(fmt)
