@@ -83,7 +83,7 @@ def main():
         sectors = u.all_sectors()
         print(f"\n  ✅  {len(symbols)} symbols loaded across {len(sectors)} sectors")
         for s in sorted(sectors):
-            count = len(u.symbols_by_sector(s))
+            count = len(u.by_sector(s))
             print(f"       {s:<20}  {count} stocks")
 
     # ── 2. OHLCV ──────────────────────────────────────────────────────────
