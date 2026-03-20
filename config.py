@@ -57,6 +57,9 @@ class Config:
     poll_interval_open:   int  = field(default_factory=lambda: _int ("BOT_POLL_INTERVAL_OPEN",   60))
     poll_interval_closed: int  = field(default_factory=lambda: _int ("BOT_POLL_INTERVAL_CLOSED", 3600))
 
+    # ── Notifications ─────────────────────────────────────────────────────────
+    sns_topic_arn:  str = field(default_factory=lambda: os.getenv("SNS_TOPIC_ARN", ""))
+
     # ── Risk Controls ─────────────────────────────────────────────────────────
     max_daily_loss:         float = field(default_factory=lambda: _float("RISK_MAX_DAILY_LOSS",    1000.0))
     max_holdings:           int   = field(default_factory=lambda: _int  ("RISK_MAX_HOLDINGS",      10))

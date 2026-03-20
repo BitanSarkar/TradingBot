@@ -344,9 +344,69 @@ class TradingBot:
         except Exception as exc:
             log.error("on_stop() raised: %s", exc)
 
-        log.info("Orders placed  : %d", len(self.strategy.orders.get_order_history()))
-        log.info("Realized P&L   : %.2f INR", self.strategy.positions.total_realized_pnl())
+        orders  = self.strategy.orders.get_order_history()
+        pnl     = self.strategy.positions.total_realized_pnl()
+        open_pos = self.strategy.positions.all_open()
+
+        log.info("Orders placed  : %d", len(orders))
+        log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
+
+        self._send_daily_summary(orders, pnl, open_pos)
+
+    def _send_daily_summary(self, orders: list, pnl: float, open_positions: list) -> None:
+        """Send end-of-day trade summary via AWS SNS email."""
+        topic_arn = self.config.sns_topic_arn
+        if not topic_arn:
+            return
+
+        from datetime import date
+        try:
+            import boto3
+            sns = boto3.client("sns", region_name="ap-south-1")
+
+            # Build summary
+            buys  = [o for o in orders if o.get("type") == "BUY"]
+            sells = [o for o in orders if o.get("type") == "SELL"]
+
+            lines = [
+                f"TradingBot Daily Summary — {date.today().isoformat()}",
+                "=" * 50,
+                f"Orders today   : {len(orders)}  ({len(buys)} BUY, {len(sells)} SELL)",
+                f"Realized P&L   : ₹{pnl:+.2f}",
+                f"Open positions : {len(open_positions)}",
+                "",
+            ]
+
+            if buys:
+                lines.append("── BUYs ──")
+                for o in buys:
+                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  status={o.get('status','?')}")
+                lines.append("")
+
+            if sells:
+                lines.append("── SELLs ──")
+                for o in sells:
+                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  status={o.get('status','?')}")
+                lines.append("")
+
+            if open_positions:
+                lines.append("── Open Positions ──")
+                for pos in open_positions:
+                    lines.append(f"  {pos.symbol:12s}  qty={pos.quantity}  avg=₹{pos.avg_buy_price:.2f}")
+                lines.append("")
+
+            mode = "DRY RUN" if self.config.dry_run else "LIVE"
+            lines.append(f"Mode: {mode}")
+
+            subject = f"[TradingBot] EOD Summary {date.today().isoformat()} | P&L ₹{pnl:+.2f}"
+            message = "\n".join(lines)
+
+            sns.publish(TopicArn=topic_arn, Subject=subject, Message=message)
+            log.info("Daily summary sent via SNS.")
+
+        except Exception as exc:
+            log.error("Failed to send SNS summary: %s", exc)
 
 
 # ======================================================================
