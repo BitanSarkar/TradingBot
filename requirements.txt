@@ -4,9 +4,13 @@ python-dotenv>=1.0.0
 # NSE data sources
 nselib>=2.0.0
 nsepy>=0.8
+# pandas_market_calendars is a transitive dep of nselib.
+# v4.4+ uses `X | Y` union syntax in function signatures which requires
+# Python 3.10+.  Pin to <4.4 so the bot runs on Python 3.9 (EC2 Amazon Linux).
+pandas_market_calendars>=3.6,<4.4
 
 # Data processing
-pandas>=2.0.0
+pandas>=2.0.0,<3.0.0   # pandas 3.x drops some APIs used by nselib/nsepy
 numpy>=1.26.0
 requests>=2.31.0
 urllib3>=2.0.0          # used directly for Retry + HTTPAdapter pool tuning
