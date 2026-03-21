@@ -173,7 +173,7 @@ class ScoringEngine:
             result.setdefault(s.sector, []).append(s)
         return result
 
-    def top_n_per_sector(self, scores: list[StockScore], n: int = 5) -> dict[str, list[StockScore]]:
+    def top_n_per_sector(self, scores: list[StockScore], n: int) -> dict[str, list[StockScore]]:
         """Return top N stocks per sector."""
         by_sector = self.scores_by_sector(scores)
         return {sector: stocks[:n] for sector, stocks in by_sector.items()}

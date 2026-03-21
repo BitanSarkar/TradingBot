@@ -79,6 +79,7 @@ class Config:
     score_buy_threshold:  float = field(default_factory=lambda: _float("SCORE_BUY_THRESHOLD",  70.0))
     score_sell_threshold: float = field(default_factory=lambda: _float("SCORE_SELL_THRESHOLD", 40.0))
     score_top_n:          int   = field(default_factory=lambda: _int  ("SCORE_TOP_N",          50))
+    score_sector_top_n:   int   = field(default_factory=lambda: _int  ("SCORE_SECTOR_TOP_N",    5))
 
     # ── Exchange / Segment Defaults ───────────────────────────────────────────
     default_exchange: str = "NSE"

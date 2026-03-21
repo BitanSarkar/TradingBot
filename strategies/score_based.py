@@ -175,17 +175,19 @@ class ScoreBasedStrategy(BaseStrategy):
     def _log_scores(self, scores: list) -> None:
         if not scores:
             return
-        top    = scores[:5]
-        bottom = scores[-5:]
-        self.log.info("── Top 5 ──")
+        k      = self.config.score_sector_top_n
+        top    = scores[:k]
+        bottom = scores[-k:]
+        self.log.info("── Top %d ──", k)
         for s in top:
             self.log.info("  %-12s  %s  composite=%.1f", s.symbol, s.sector, s.composite)
-        self.log.info("── Bottom 5 ──")
+        self.log.info("── Bottom %d ──", k)
         for s in bottom:
             self.log.info("  %-12s  %s  composite=%.1f", s.symbol, s.sector, s.composite)
 
-    def print_score_table(self, n: int = 20) -> None:
+    def print_score_table(self, n: int | None = None) -> None:
         """Pretty-print the top-N scores (call from REPL for debugging)."""
+        n = n or self.config.score_sector_top_n
         df = self._engine.to_dataframe(self.last_scores[:n])
         if not df.empty:
             cols = ["symbol", "sector", "composite", "technical", "fundamental", "momentum"]

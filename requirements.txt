@@ -23,5 +23,8 @@ feedparser>=6.0.0
 vaderSentiment>=3.3.2
 
 # FinBERT — financial-domain BERT sentiment model (~400 MB, one-time download)
-transformers>=4.40.0
-torch>=2.2.0
+# Pinned tightly to avoid pip resolver backtracking on transitive CUDA deps.
+# On EC2 (no GPU) install CPU-only torch manually:
+#   pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+transformers>=4.40.0,<4.48.0
+torch>=2.6.0,<2.7.0
