@@ -343,6 +343,34 @@ class TradingBot:
 
         return True
 
+    def _market_movers(self, top_n: int = 5) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
+        """Return (gainers, losers) as [(symbol, pct_change), ...] from today's OHLCV cache."""
+        from pathlib import Path
+        import pandas as pd
+
+        ohlcv_dir = Path("cache/ohlcv")
+        if not ohlcv_dir.exists():
+            return [], []
+
+        changes: list[tuple[str, float]] = []
+        for path in ohlcv_dir.glob("*.parquet"):
+            try:
+                df = pd.read_parquet(path, columns=["Close"])
+                if len(df) < 2:
+                    continue
+                prev  = float(df["Close"].iloc[-2])
+                today = float(df["Close"].iloc[-1])
+                if prev > 0:
+                    changes.append((path.stem, (today - prev) / prev * 100))
+            except Exception:
+                continue
+
+        if not changes:
+            return [], []
+
+        changes.sort(key=lambda x: x[1])
+        return list(reversed(changes[-top_n:])), changes[:top_n]
+
     def _shutdown(self) -> None:
         log.info("Running shutdown hook...")
         try:
@@ -353,21 +381,14 @@ class TradingBot:
         orders   = self.strategy.orders.get_order_history()
         pnl      = self.strategy.positions.total_realized_pnl()
         open_pos = self.strategy.positions.all_open()
-        all_pos  = self.strategy.positions.all_positions()
 
         log.info("Orders placed  : %d", len(orders))
         log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
 
-        self._send_daily_summary(orders, pnl, open_pos, all_pos)
+        self._send_daily_summary(orders, pnl, open_pos)
 
-    def _send_daily_summary(
-        self,
-        orders: list,
-        pnl: float,
-        open_positions: list,
-        all_positions: list,
-    ) -> None:
+    def _send_daily_summary(self, orders: list, pnl: float, open_positions: list) -> None:
         """Send end-of-day trade summary via AWS SNS email."""
         topic_arn = self.config.sns_topic_arn
         if not topic_arn:
@@ -390,21 +411,17 @@ class TradingBot:
                 "",
             ]
 
-            # ── Top Gainers / Losers (by realized P&L) ──
-            traded = [p for p in all_positions if p.realized_pnl != 0]
-            if traded:
-                k       = min(5, len(traded))
-                gainers = sorted(traded, key=lambda p: p.realized_pnl, reverse=True)[:k]
-                losers  = sorted(traded, key=lambda p: p.realized_pnl)[:k]
-
-                lines.append("── Top Gainers ──")
-                for p in gainers:
-                    lines.append(f"  {p.symbol:12s}  P&L ₹{p.realized_pnl:+.2f}")
+            # ── Market Top Gainers / Losers (today's % change across NSE universe) ──
+            gainers, losers = self._market_movers(top_n=5)
+            if gainers:
+                lines.append("── Market Top Gainers ──")
+                for sym, pct in gainers:
+                    lines.append(f"  {sym:12s}  {pct:+.2f}%")
                 lines.append("")
-
-                lines.append("── Top Losers ──")
-                for p in losers:
-                    lines.append(f"  {p.symbol:12s}  P&L ₹{p.realized_pnl:+.2f}")
+            if losers:
+                lines.append("── Market Top Losers ──")
+                for sym, pct in losers:
+                    lines.append(f"  {sym:12s}  {pct:+.2f}%")
                 lines.append("")
 
             if buys:
