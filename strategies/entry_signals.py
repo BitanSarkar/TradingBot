@@ -17,7 +17,7 @@ signal and either:
     small pullback to improve the entry price)
   - Rejects (low quality — this tick's setup is poor; wait for next tick)
 
-Five research-backed components, each scored 0–100:
+Five research-backed components plus one override path, each scored 0–100:
 
 1. SCORE VELOCITY & ACCELERATION  (Jegadeesh & Titman, 1993)
    ─────────────────────────────────────────────────────────
@@ -67,6 +67,34 @@ Five research-backed components, each scored 0–100:
    If the limit does NOT fill within entry_limit_timeout_ticks, cancel and
    accept market price (don't miss a genuine breakout just for a few rupees).
 
+6. BULLISH DIVERGENCE BYPASS  (O'Neil, 1988; Weinstein, 1988)
+   ────────────────────────────────────────────────────────────
+   Markets go through bear phases where the bull_ratio drops below the regime
+   threshold, blocking ALL buys.  But not all stocks fall equally — some
+   exceptional stocks maintain or improve their composite score even as the
+   broad market deteriorates.  This "relative strength" (O'Neil's #1 CAN SLIM
+   rule — RS) is one of the most powerful bull signals.
+
+   The bypass fires when ALL three conditions hold simultaneously:
+     a) current_score >= regime_bypass_min_score  (≥78: truly exceptional quality)
+     b) score_velocity >= regime_bypass_min_velocity (≥1.5: score actively rising)
+     c) rsi <= regime_bypass_max_rsi             (≤45: price is beaten down)
+
+   Why these three together?
+   - High score + positive velocity = the company's fundamentals & technicals are
+     IMPROVING while the rest of the market deteriorates.  This is the definition
+     of relative strength — the hallmark of stocks that lead the next bull phase.
+   - Oversold RSI = the price has already fallen despite the improving score.
+     You're buying a temporarily depressed price on a structurally sound stock.
+     This combination (score diverging up, price diverging down) is exactly the
+     setup described by Stan Weinstein in "Secrets for Profiting in Bull and
+     Bear Markets" as a Stage 1 → Stage 2 transition candidate.
+
+   Risk management: divergence buys ALWAYS use a LIMIT order (never market),
+   with an enhanced pullback multiplier (×1.5 of normal), to ensure the best
+   possible entry price.  The regime_score is capped at 30/100 to reflect the
+   real market risk, keeping the overall quality score honest.
+
 References:
   Wilder, J.W. (1978). New Concepts in Technical Trading Systems.
   Granville, J. (1963). Granville's New Key to Stock Market Profits.
@@ -75,6 +103,8 @@ References:
   Van Tharp, R. (1998). Trade Your Way to Financial Freedom. McGraw-Hill.
   Faber, M. (2007). A Quantitative Approach to Tactical Asset Allocation. JOIM.
   Lo, A. & MacKinlay, C. (1988). Stock Market Prices Do Not Follow Random Walks. RFS.
+  O'Neil, W. (1988). How to Make Money in Stocks. McGraw-Hill.
+  Weinstein, S. (1988). Secrets for Profiting in Bull and Bear Markets. McGraw-Hill.
 """
 
 from __future__ import annotations
@@ -107,6 +137,7 @@ class EntryQuality:
     price_score     : float  — 0–100 sub-score (entry price quality)
     volume_score    : float  — 0–100 sub-score
     regime_score    : float  — 0–100 sub-score
+    is_divergence   : bool   — True = regime bypass triggered (bear-market dip buy)
     atr             : float  — ATR used for limit price calculation
     reason          : str    — human-readable explanation
     """
@@ -120,6 +151,7 @@ class EntryQuality:
     price_score:    float  = 0.0
     volume_score:   float  = 0.0
     regime_score:   float  = 0.0
+    is_divergence:  bool   = False
     atr:            float  = 0.0
     reason:         str    = ""
 
@@ -168,6 +200,11 @@ def compute_entry_quality(
     vol_min_ratio:          float = 0.8,         # reject if vol < 80% of avg
     # Market regime
     bull_ratio_min:         float = 0.40,        # reject if < 40% of stocks bullish
+    # Divergence bypass — allows buying quality dips even in a bear market
+    # All three conditions must hold simultaneously to trigger the bypass.
+    regime_bypass_min_score:    float = 78.0,    # composite score floor for bypass
+    regime_bypass_min_velocity: float = 1.5,     # score must be actively rising
+    regime_bypass_max_rsi:      float = 45.0,    # price must be oversold
     # Entry price
     atr_period:             int   = 14,
     entry_pullback_mult:    float = 0.5,         # limit = ltp − mult × ATR
@@ -189,6 +226,15 @@ def compute_entry_quality(
     score_history   : list of composite scores from previous ticks (oldest first).
     universe_scores : all symbols' composite scores this tick (for regime).
     current_ltp     : live last traded price.
+
+    Regime bypass (bullish divergence)
+    -----------------------------------
+    When bull_ratio < bull_ratio_min (bear market), normally all buys are blocked.
+    The bypass allows a BUY if the stock shows relative strength divergence:
+      • score >= regime_bypass_min_score  (extremely high quality — e.g. ≥ 78)
+      • velocity >= regime_bypass_min_velocity  (score actively improving — e.g. ≥ 1.5)
+      • RSI <= regime_bypass_max_rsi  (price beaten down / oversold — e.g. ≤ 45)
+    Bypass buys always use LIMIT orders with enhanced pullback to minimise risk.
     """
 
     # ── Guard: not enough data ────────────────────────────────────────────────
@@ -351,28 +397,68 @@ def compute_entry_quality(
     volume_score = max(0.0, volume_score)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # 4. MARKET REGIME
+    # 4. MARKET REGIME  (with Bullish Divergence Bypass)
     # ─────────────────────────────────────────────────────────────────────────
-    regime_score = 50.0
+    regime_score    = 50.0
+    is_divergence   = False
+
     if universe_scores:
         bull_ratio  = sum(1 for s in universe_scores if s > 50) / len(universe_scores)
         avg_score   = float(np.mean(universe_scores))
 
         if bull_ratio < bull_ratio_min:
-            return EntryQuality(
-                qualified=False, entry_price=current_ltp, use_limit=False,
-                quality_score=0.0, score_velocity=velocity, score_accel=accel,
-                velocity_score=velocity_score, price_score=price_score,
-                volume_score=volume_score, atr=atr,
-                reason=f"unfavourable market regime (bull_ratio={bull_ratio:.0%})",
-            )
+            # ── Regime is unfavourable — check for divergence bypass ──────────
+            #
+            # A stock qualifies for bypass when it shows RELATIVE STRENGTH:
+            #   • Score ≥ bypass_min_score  → structurally excellent quality
+            #   • Velocity ≥ bypass_min_vel → score still rising vs. market
+            #   • RSI ≤ bypass_max_rsi      → price already beaten down (safe entry)
+            #
+            # All three together = the stock's fundamentals/technicals are
+            # *diverging upward* from a broadly declining market.  This is
+            # exactly what leads the next bull phase (O'Neil's CAN SLIM, RS rule).
+            bypass_score_ok    = current_score  >= regime_bypass_min_score
+            bypass_velocity_ok = velocity       >= regime_bypass_min_velocity
+            bypass_rsi_ok      = rsi            <= regime_bypass_max_rsi
 
-        # bull_ratio 0.4 → score 0; 0.5 → 50; 0.65 → 100
-        regime_score = min(100.0, max(0.0, (bull_ratio - 0.40) / 0.25 * 100.0))
+            if bypass_score_ok and bypass_velocity_ok and bypass_rsi_ok:
+                # Divergence bypass triggered
+                is_divergence = True
+                # Cap regime score — we acknowledge the market risk, don't pretend
+                # the environment is good.  30/100 keeps the overall quality honest.
+                regime_score = 30.0
+                log.info(
+                    "⚡ DIVERGENCE BYPASS: score=%.1f vel=%.2f RSI=%.0f "
+                    "bull_ratio=%.0f%% — relative strength detected in weak market",
+                    current_score, velocity, rsi, bull_ratio * 100,
+                )
+            else:
+                # No bypass — standard regime rejection
+                missing = []
+                if not bypass_score_ok:
+                    missing.append(f"score={current_score:.1f}<{regime_bypass_min_score}")
+                if not bypass_velocity_ok:
+                    missing.append(f"vel={velocity:.2f}<{regime_bypass_min_velocity}")
+                if not bypass_rsi_ok:
+                    missing.append(f"RSI={rsi:.0f}>{regime_bypass_max_rsi}")
+                return EntryQuality(
+                    qualified=False, entry_price=current_ltp, use_limit=False,
+                    quality_score=0.0, score_velocity=velocity, score_accel=accel,
+                    velocity_score=velocity_score, price_score=price_score,
+                    volume_score=volume_score, atr=atr,
+                    reason=(
+                        f"unfavourable market regime (bull_ratio={bull_ratio:.0%}) "
+                        f"— no divergence bypass: {', '.join(missing)}"
+                    ),
+                )
+        else:
+            # Normal bull/neutral market — scale regime score 0–100
+            # bull_ratio 0.40 → 0;  0.50 → 40;  0.65 → 100
+            regime_score = min(100.0, max(0.0, (bull_ratio - 0.40) / 0.25 * 100.0))
 
-        # Bonus if the overall universe average score is high
-        if avg_score > 55:
-            regime_score = min(100.0, regime_score + (avg_score - 55) * 1.5)
+            # Bonus if the overall universe average score is high
+            if avg_score > 55:
+                regime_score = min(100.0, regime_score + (avg_score - 55) * 1.5)
 
     # ─────────────────────────────────────────────────────────────────────────
     # 5. COMPOSITE ENTRY QUALITY
@@ -390,6 +476,7 @@ def compute_entry_quality(
             quality_score=quality, score_velocity=velocity, score_accel=accel,
             velocity_score=velocity_score, price_score=price_score,
             volume_score=volume_score, regime_score=regime_score, atr=atr,
+            is_divergence=is_divergence,
             reason=(
                 f"quality={quality:.1f} < threshold={min_quality_score:.0f} "
                 f"(vel={velocity_score:.0f} price={price_score:.0f} "
@@ -400,11 +487,21 @@ def compute_entry_quality(
     # ─────────────────────────────────────────────────────────────────────────
     # 6. OPTIMAL ENTRY PRICE
     # ─────────────────────────────────────────────────────────────────────────
-    # High quality (≥ 80): enter at market — don't risk missing the move
-    # Medium quality (55–80): set a limit order slightly below for better fill
-    if quality >= 80.0 or entry_pullback_mult == 0:
-        use_limit   = False
-        entry_price = current_ltp
+    # Divergence buys: ALWAYS use LIMIT — never buy at market in a weak market.
+    #   Use 1.5× the normal pullback to get an even better entry price.
+    #   The wider the pullback, the better R:R on a stock that may dip further
+    #   before reversing upward.
+    #
+    # Normal buys:
+    #   High quality (≥ 80): enter at market — don't risk missing the move
+    #   Medium quality (55–80): set a limit order slightly below for better fill
+    if is_divergence:
+        use_limit      = True
+        # Enhanced pullback for bear-market dip buys
+        entry_price    = current_ltp - (entry_pullback_mult * 1.5) * atr
+    elif quality >= 80.0 or entry_pullback_mult == 0:
+        use_limit      = False
+        entry_price    = current_ltp
     else:
         # Limit price = current LTP − pullback_mult × ATR
         # The pullback_mult scales with quality — better quality = smaller pullback target
@@ -414,13 +511,14 @@ def compute_entry_quality(
         entry_price    = current_ltp - adjusted_mult * atr
         use_limit      = True
 
+    divergence_tag = " ⚡DIVERGENCE" if is_divergence else ""
     reason = (
-        f"quality={quality:.1f}/100 ✓ "
+        f"quality={quality:.1f}/100 ✓{divergence_tag} "
         f"| vel={velocity:+.2f}pt/tick (score={velocity_score:.0f}) "
         f"| price_score={price_score:.0f} (RSI={rsi:.0f} %B={pct_b:.2f}) "
         f"| vol={vol_ratio:.2f}x avg (score={volume_score:.0f}) "
         f"| regime={regime_score:.0f} "
-        f"| {'LIMIT @₹' + str(round(entry_price,2)) if use_limit else 'MARKET'}"
+        f"| {'LIMIT @₹' + str(round(entry_price, 2)) if use_limit else 'MARKET'}"
     )
 
     return EntryQuality(
@@ -434,6 +532,7 @@ def compute_entry_quality(
         price_score=price_score,
         volume_score=volume_score,
         regime_score=regime_score,
+        is_divergence=is_divergence,
         atr=atr,
         reason=reason,
     )

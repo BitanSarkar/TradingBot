@@ -130,6 +130,23 @@ class Config:
     # Reject if fewer than this fraction of universe stocks have score > 50.
     entry_bull_ratio_min:       float = field(default_factory=lambda: _float("ENTRY_BULL_RATIO_MIN",        0.40))
 
+    # ── Bullish Divergence Bypass ──────────────────────────────────────────────
+    # When the market is in a bear regime (bull_ratio < entry_bull_ratio_min),
+    # the bot normally blocks ALL buys.  The bypass allows an exceptional stock
+    # to be purchased if it shows relative strength divergence — its score is
+    # high AND rising even while the broad market deteriorates, AND the price
+    # is already beaten down (oversold RSI).  ALL three conditions must be met.
+    #
+    # These buys always use a LIMIT order with 1.5× the normal pullback to
+    # protect against further downside in the weak market environment.
+
+    # Minimum composite score to be eligible for bypass (default 78 — very high)
+    entry_regime_bypass_min_score:    float = field(default_factory=lambda: _float("ENTRY_REGIME_BYPASS_MIN_SCORE",    78.0))
+    # Minimum score velocity (pts/tick) — score must be actively rising
+    entry_regime_bypass_min_velocity: float = field(default_factory=lambda: _float("ENTRY_REGIME_BYPASS_MIN_VELOCITY", 1.5))
+    # Maximum RSI — price must be oversold to qualify (default 45)
+    entry_regime_bypass_max_rsi:      float = field(default_factory=lambda: _float("ENTRY_REGIME_BYPASS_MAX_RSI",      45.0))
+
     # Limit order pullback: place limit at `ltp − mult × ATR` for medium-quality entries.
     # 0.0 = always use market orders (faster, but worse average fill price).
     entry_pullback_mult:        float = field(default_factory=lambda: _float("ENTRY_PULLBACK_MULT",         0.5))

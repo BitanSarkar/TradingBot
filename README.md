@@ -26,6 +26,7 @@ A fully automated, score-driven equity trading bot for the Indian stock market (
    - [Price Entry Quality](#price-entry-quality)
    - [Volume Confirmation at Entry](#volume-confirmation-at-entry)
    - [Market Regime Filter](#market-regime-filter)
+   - [Bullish Divergence Bypass](#bullish-divergence-bypass)
    - [Optimal Entry Price — ATR Limit Orders](#optimal-entry-price--atr-limit-orders)
    - [Entry Quality Formula](#entry-quality-formula)
 6. [Statistical Exit Signals — Maximising Profit](#statistical-exit-signals--maximising-profit)
@@ -77,7 +78,7 @@ graph TD
 | **Data Cache** | Parquet files for OHLCV (one file per symbol, ~1 year of daily candles), JSON files for fundamentals. Only downloads what's stale — cold start takes 5–15 minutes, warm ticks take seconds. |
 | **Scoring Engine** | Two-pass scorer. Pass 1 scores all 2,117 stocks using technical + fundamental + momentum — takes about 4 seconds. Pass 2 runs FinBERT news analysis only on the top-50 candidates — takes 2–4 minutes. |
 | **IntraDay Pulse** | A fifth pillar, active only when the NSE market is open (09:15–15:30 IST). Uses same-day candle data (day return, range position, volume pace, open distance) to capture whether a stock is rallying or collapsing right now. |
-| **Entry Quality Gate** | Before any BUY is placed, five statistical filters are applied: score velocity (is the score rising or falling through the threshold?), price entry quality (RSI, Bollinger %B, distance from ATR support), volume confirmation, market regime, and an ATR-based limit order for better fill prices. Stocks failing any filter are skipped this tick. |
+| **Entry Quality Gate** | Before any BUY is placed, six statistical filters are applied: score velocity (is the score rising or falling through the threshold?), price entry quality (RSI, Bollinger %B, distance from ATR support), volume confirmation, market regime, an optional bullish divergence bypass (buy quality dips even in bear markets when relative strength divergence is detected), and an ATR-based limit order for better fill prices. Stocks failing any filter are skipped this tick. |
 | **Statistical Exit Engine** | Each held position has dynamically computed exit levels — ATR-based stop-loss, Historical VaR stop, Chandelier trailing stop (LeBeau 1999), and a take-profit at a fixed R:R ratio. No hardcoded percentages — a volatile stock gets a wider stop automatically; a stable stock gets a tighter one. |
 | **Risk Gate** | Hard guardrails: max simultaneous holdings, max daily loss, max quantity per order. Dynamic position sizing computes the right share count from your live wallet balance. |
 | **Groww API** | Executes real CNC (delivery) orders (MARKET or LIMIT) in live mode, or logs simulated fills in dry-run mode. |
@@ -153,11 +154,13 @@ The top-50 stocks by composite score from Pass 1 go through a second, slower pas
 
 3. **Volume confirmation** — if today's volume is below `ENTRY_VOL_MIN_RATIO` (default 80%) of the 20-day average, the signal is rejected. Thin-volume moves lack institutional conviction and are more likely to reverse. The volume *trend* over the last 5 days also contributes — rising volume is a positive signal.
 
-4. **Market regime** — the fraction of all 2,117 NSE stocks with composite score > 50 is computed in real time. If fewer than `ENTRY_BULL_RATIO_MIN` (default 40%) of the market is bullish, no new BUY signals are generated regardless of individual stock scores. Buying individual stocks in a broad bear market dramatically reduces win rate.
+4. **Market regime** — the fraction of all 2,117 NSE stocks with composite score > 50 is computed in real time. If fewer than `ENTRY_BULL_RATIO_MIN` (default 40%) of the market is bullish, the regime filter normally blocks all new BUY signals. However, the **Bullish Divergence Bypass** can override this for stocks showing exceptional relative strength (see below).
 
-5. **Composite entry quality score** — velocity, price, volume, and regime sub-scores are weighted into a single 0–100 quality index. If the index is below `ENTRY_MIN_QUALITY` (default 55), the signal is skipped this tick and re-evaluated next tick.
+5. **Bullish divergence bypass** — when the market is in a bear regime but a stock simultaneously satisfies all three conditions: composite score ≥ `ENTRY_REGIME_BYPASS_MIN_SCORE` (default 78), score velocity ≥ `ENTRY_REGIME_BYPASS_MIN_VELOCITY` (default 1.5 pts/tick), and RSI ≤ `ENTRY_REGIME_BYPASS_MAX_RSI` (default 45), the regime block is lifted for that stock alone. This is the classic O'Neil relative strength signal — the stock's fundamentals are improving while the market deteriorates, and the price is already beaten down. These buys always use LIMIT orders with a 1.5× enhanced pullback to minimise risk in the weak environment.
 
-6. **Optimal entry price** — if quality is high (≥ 80), a MARKET order is placed immediately. For medium quality (55–80), a LIMIT order is placed at `ltp − entry_pullback_mult × ATR`. Small intraday pullbacks occur frequently; catching one gives a better fill price, which directly increases the profit margin. If the limit is not filled within `ENTRY_LIMIT_TIMEOUT_TICKS` (default 3 ticks), it is cancelled and a market order is placed instead.
+6. **Composite entry quality score** — velocity, price, volume, and regime sub-scores are weighted into a single 0–100 quality index. If the index is below `ENTRY_MIN_QUALITY` (default 55), the signal is skipped this tick and re-evaluated next tick. Note: divergence bypass buys cap the regime_score at 30 to keep the quality score honest — the market risk is real even if the stock looks good.
+
+7. **Optimal entry price** — if quality is high (≥ 80), a MARKET order is placed immediately. For medium quality (55–80), a LIMIT order is placed at `ltp − entry_pullback_mult × ATR`. Divergence bypass buys always use LIMIT at `ltp − 1.5 × entry_pullback_mult × ATR`. Small intraday pullbacks occur frequently; catching one gives a better fill price, which directly increases the profit margin. If the limit is not filled within `ENTRY_LIMIT_TIMEOUT_TICKS` (default 3 ticks), it is cancelled and a market order is placed instead.
 
 **SELL logic** — for every held position, the statistical exit engine evaluates five conditions on every tick (see the Statistical Exit Signals section for full detail). Score < threshold alone never triggers a sell at a loss.
 
@@ -634,7 +637,66 @@ bull_ratio 0.55    → regime_score = 60  (healthy)
 bull_ratio 0.65+   → regime_score = 100 (strong bull participation)
 ```
 
-This filter alone prevents the most destructive scenario: buying individual stocks during a broad market correction. When 60%+ of NSE stocks are deteriorating, the smartest action is no new entries.
+This filter alone prevents the most destructive scenario: buying individual stocks during a broad market correction. When 60%+ of NSE stocks are deteriorating, the smartest action is usually no new entries.
+
+---
+
+### Bullish Divergence Bypass
+
+**The core question:** if the market is in a bear phase and most stocks are falling, but one stock has a very high score, a rising score velocity, and an oversold price — should you buy it?
+
+**The answer: yes, but only under very strict conditions, and only with a limit order.**
+
+**Origin — William O'Neil's Relative Strength (1988):** O'Neil spent decades studying the greatest stock market winners from 1880 to the 1980s. His single most consistent finding, codified in his CAN SLIM methodology, was the **Relative Strength (RS) rating**: stocks that outperform the broad market during a market decline are almost always the first to make new highs when the market recovers. The reason is structural — if a company's earnings are accelerating, institutional fund managers keep buying regardless of the macro environment. Their buying pressure shows up as the stock holding up (or even rising) while everything else falls. You are, in effect, front-running the next bull market leader.
+
+**Stan Weinstein's Stage Analysis (1988):** Weinstein described four distinct stages every stock goes through: Stage 1 (base), Stage 2 (markup), Stage 3 (top), Stage 4 (decline). His key observation was that a stock entering Stage 2 from a Stage 1 base often does so while the broad market is still in Stage 4 — the stock completes its bottom and begins rallying *before* the market recovers. Waiting for the market to become bullish (bull_ratio ≥ 40%) before buying such a stock means missing the first 10–20% of the move.
+
+**Why three conditions must all hold simultaneously:**
+
+| Condition | What it confirms | What fails without it |
+|-----------|-----------------|----------------------|
+| `score ≥ ENTRY_REGIME_BYPASS_MIN_SCORE` (≥78) | Fundamentals AND technicals are structurally excellent — this is not a mediocre stock that happens to have an improving score | A score of 70 barely above threshold in a bear market has high reversal risk |
+| `velocity ≥ ENTRY_REGIME_BYPASS_MIN_VELOCITY` (≥1.5 pts/tick) | The score is actively *rising* through the bear market — institutional accumulation is ongoing | A stock with a flat score just happens to be above the threshold; it is not diverging |
+| `RSI ≤ ENTRY_REGIME_BYPASS_MAX_RSI` (≤45) | The price has already been beaten down — you are buying a temporarily depressed price on a structurally improving stock | If RSI is 62 and score is rising, the price has already recovered; you're chasing, not dipping |
+
+**What this looks like in practice:**
+
+```
+Bear market scenario:  bull_ratio = 13%  (87% of NSE stocks scoring poorly)
+
+Stock X:  composite = 82.3  velocity = +2.1 pts/tick  RSI = 38
+  → All three bypass conditions met
+  → ⚡ DIVERGENCE BYPASS — LIMIT order placed at: ltp − 1.5 × ATR
+  → regime_score capped at 30 (honest about market risk)
+  → quality_score = 62.4/100 (qualifies; lower than a bull market entry)
+
+Stock Y:  composite = 76.1  velocity = +1.8 pts/tick  RSI = 52
+  → Score and velocity ok, but RSI = 52 > 45 (price not oversold)
+  → No bypass — BUY skipped: unfavourable regime + RSI=52 > 45
+
+Stock Z:  composite = 80.5  velocity = +0.8 pts/tick  RSI = 39
+  → Score and RSI ok, but velocity = 0.8 < 1.5 (not rising fast enough)
+  → No bypass — BUY skipped: unfavourable regime + vel=0.8 < 1.5
+```
+
+**Risk management on divergence buys:**
+- Always LIMIT order, never MARKET — never chase even a good stock in a weak market
+- Pullback is 1.5× the normal ATR pullback — secures a better entry price as the stock may dip further
+- The `regime_score` is hard-capped at 30/100 regardless of how good the stock looks — the overall quality score stays honest and reflects real market risk
+- Normal ATR stop-loss, VaR stop, and Chandelier exit apply — divergence does not relax exit controls
+
+**Configure the bypass thresholds:**
+
+```env
+ENTRY_REGIME_BYPASS_MIN_SCORE=78       # raise to 82+ for stricter selectivity
+ENTRY_REGIME_BYPASS_MIN_VELOCITY=1.5   # raise to 2.0 for only very fast risers
+ENTRY_REGIME_BYPASS_MAX_RSI=45         # lower to 40 for only deeply oversold stocks
+```
+
+To **disable** the bypass entirely (only buy in bull markets), set an impossibly high score threshold:
+```env
+ENTRY_REGIME_BYPASS_MIN_SCORE=200      # no stock can score above 100; bypass never fires
+```
 
 ---
 
@@ -674,17 +736,18 @@ entry_quality < ENTRY_MIN_QUALITY (55) → skip this tick
 
 **Example — same score, very different entry quality:**
 
-| Attribute | Stock A (entry quality 81) | Stock B (entry quality 24) |
-|-----------|---------------------------|---------------------------|
-| Score | 74 | 74 |
-| Score history | 60→64→68→71→74 (rising) | 88→84→80→76→74 (falling) |
-| RSI at entry | 47 (oversold + improving) | 71 (overbought) |
-| Bollinger %B | 0.29 (near lower band) | 0.84 (near upper band) |
-| Volume | 1.6× average | 0.55× average |
-| Market | 58% bullish | 58% bullish |
-| **Decision** | **BUY — LIMIT order** | **SKIP** |
+| Attribute | Stock A (entry quality 81) | Stock B (entry quality 24) | Stock C (divergence bypass) |
+|-----------|---------------------------|---------------------------|------------------------------|
+| Composite score | 74 | 74 | 82 |
+| Score history | 60→64→68→71→74 (rising) | 88→84→80→76→74 (falling) | 70→74→77→80→82 (rising, +2.1/tick) |
+| RSI at entry | 47 (oversold + improving) | 71 (overbought) | 38 (deeply oversold) |
+| Bollinger %B | 0.29 (near lower band) | 0.84 (near upper band) | 0.14 (near lower band) |
+| Volume | 1.6× average | 0.55× average | 1.3× average |
+| Market | 58% bullish | 58% bullish | 13% bullish (bear phase) |
+| Regime bypass? | No (market fine) | No | ⚡ Yes — score≥78, vel≥1.5, RSI≤45 |
+| **Decision** | **BUY — LIMIT order** | **SKIP** | **BUY — LIMIT @ 1.5× pullback** |
 
-Stock A gives the bot maximum room between entry and exit. Stock B has already priced in most of the move.
+Stock A is the ideal normal entry. Stock B has already priced in the move. Stock C triggers the divergence bypass — the broad market is bearish but this stock's fundamentals are improving, its score is rising fast, and the price is already beaten down. This is the highest-conviction dip setup.
 
 ---
 
@@ -1288,8 +1351,11 @@ Banking, IT, and Pharma each have their own full override sets — `WEIGHT_FUND_
 | `ENTRY_RSI_IDEAL_MAX` | `55.0` | RSI at or below this at entry = "not overbought" = full RSI sub-score |
 | `ENTRY_BOLLINGER_B_MAX` | `0.55` | Bollinger %B at or below this = buying near lower half of band |
 | `ENTRY_VOL_MIN_RATIO` | `0.8` | Reject if today's volume < 80% of 20-day average |
-| `ENTRY_BULL_RATIO_MIN` | `0.40` | Reject all buys if fewer than 40% of NSE stocks have score > 50 |
-| `ENTRY_PULLBACK_MULT` | `0.5` | Limit order = ltp − MULT × ATR. `0.0` = always market orders. |
+| `ENTRY_BULL_RATIO_MIN` | `0.40` | Reject all buys if fewer than 40% of NSE stocks have score > 50. Set to `0.0` to disable the regime filter entirely. |
+| `ENTRY_REGIME_BYPASS_MIN_SCORE` | `78.0` | **Divergence bypass:** composite score must be at least this high to buy in a bear market. Set to `200` to disable bypass. |
+| `ENTRY_REGIME_BYPASS_MIN_VELOCITY` | `1.5` | **Divergence bypass:** score velocity (pts/tick) must be at least this value — score must be actively rising. |
+| `ENTRY_REGIME_BYPASS_MAX_RSI` | `45.0` | **Divergence bypass:** RSI must be at or below this value — price must already be oversold/beaten down. |
+| `ENTRY_PULLBACK_MULT` | `0.5` | Limit order = ltp − MULT × ATR. `0.0` = always market orders. Divergence bypass uses 1.5× this value. |
 | `ENTRY_LIMIT_TIMEOUT_TICKS` | `3` | Cancel limit and switch to market after this many unfilled ticks |
 | `ENTRY_W_VELOCITY` | `0.30` | Sub-weight: score velocity component |
 | `ENTRY_W_PRICE` | `0.35` | Sub-weight: price entry quality (RSI + %B + support distance) |
