@@ -12,6 +12,7 @@ pandas_market_calendars>=3.6,<4.4
 # Data processing
 pandas>=2.0.0,<3.0.0   # pandas 3.x drops some APIs used by nselib/nsepy
 numpy>=1.26.0
+scipy>=1.12.0               # norm.ppf for parametric VaR in exit_signals.py
 requests>=2.31.0
 urllib3>=2.0.0          # used directly for Retry + HTTPAdapter pool tuning
 pyarrow>=15.0.0         # pandas parquet backend (data/cache.py)
@@ -25,6 +26,6 @@ vaderSentiment>=3.3.2
 # FinBERT — financial-domain BERT sentiment model (~400 MB, one-time download)
 # Pinned tightly to avoid pip resolver backtracking on transitive CUDA deps.
 # On EC2 (no GPU) install CPU-only torch manually:
-#   pip install torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+#   pip install torch==2.6.0+cpu --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 transformers>=4.40.0,<4.48.0
 torch>=2.6.0,<2.7.0

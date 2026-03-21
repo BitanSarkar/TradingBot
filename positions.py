@@ -57,6 +57,7 @@ class Position:
     quantity:      int   = 0
     avg_buy_price: float = 0.0
     realized_pnl:  float = 0.0
+    peak_price:    float = 0.0   # highest LTP seen since entry — used for trailing stop
 
     @property
     def is_flat(self) -> bool:
@@ -74,6 +75,11 @@ class Position:
         if self.avg_buy_price == 0:
             return 0.0
         return (ltp - self.avg_buy_price) / self.avg_buy_price * 100
+
+    def update_peak(self, ltp: float) -> None:
+        """Call each tick — keeps peak_price at the highest price seen since entry."""
+        if ltp > self.peak_price:
+            self.peak_price = ltp
 
 
 # ── PositionTracker ───────────────────────────────────────────────────────────
@@ -295,6 +301,9 @@ class PositionTracker:
         total_cost        = pos.avg_buy_price * pos.quantity + price * quantity
         pos.quantity      += quantity
         pos.avg_buy_price = total_cost / pos.quantity if pos.quantity else 0.0
+        # Seed peak_price on first buy; on add-to-position keep existing peak
+        if pos.peak_price == 0.0:
+            pos.peak_price = pos.avg_buy_price
         log.debug(
             "BUY confirmed: %s  qty=%d  new_avg=Rs%.2f",
             symbol, pos.quantity, pos.avg_buy_price,

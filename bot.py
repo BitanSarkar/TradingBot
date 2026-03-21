@@ -381,11 +381,32 @@ class TradingBot:
             buys  = [o for o in orders if o.get("type") == "BUY"]
             sells = [o for o in orders if o.get("type") == "SELL"]
 
+            # Compute unrealized P&L for each open position using last known LTP
+            fetcher = getattr(self.strategy, "_fetcher", None)
+            unrealized_total = 0.0
+            open_pos_rows = []
+            for pos in open_positions:
+                ltp = fetcher.get_ltp(pos.symbol) if fetcher else 0.0
+                if ltp > 0:
+                    unreal = (ltp - pos.avg_buy_price) * pos.quantity
+                    unreal_pct = (ltp - pos.avg_buy_price) / pos.avg_buy_price * 100
+                    unrealized_total += unreal
+                    open_pos_rows.append(
+                        f"  {pos.symbol:12s}  qty={pos.quantity}  "
+                        f"avg=₹{pos.avg_buy_price:.2f}  ltp=₹{ltp:.2f}  "
+                        f"unreal={unreal:+.0f} ({unreal_pct:+.1f}%)"
+                    )
+                else:
+                    open_pos_rows.append(
+                        f"  {pos.symbol:12s}  qty={pos.quantity}  avg=₹{pos.avg_buy_price:.2f}"
+                    )
+
             lines = [
                 f"TradingBot Daily Summary — {date.today().isoformat()}",
-                "=" * 50,
+                "=" * 55,
                 f"Orders today   : {len(orders)}  ({len(buys)} BUY, {len(sells)} SELL)",
                 f"Realized P&L   : ₹{pnl:+.2f}",
+                f"Unrealized P&L : ₹{unrealized_total:+.2f}  (open positions)",
                 f"Open positions : {len(open_positions)}",
                 "",
             ]
@@ -393,38 +414,54 @@ class TradingBot:
             if buys:
                 lines.append("── BUYs ──")
                 for o in buys:
-                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  status={o.get('status','?')}")
+                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  "
+                                  f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}")
                 lines.append("")
 
             if sells:
                 lines.append("── SELLs ──")
                 for o in sells:
-                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  status={o.get('status','?')}")
+                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  "
+                                  f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}")
                 lines.append("")
 
-            if open_positions:
+            if open_pos_rows:
                 lines.append("── Open Positions ──")
-                for pos in open_positions:
-                    lines.append(f"  {pos.symbol:12s}  qty={pos.quantity}  avg=₹{pos.avg_buy_price:.2f}")
+                lines.extend(open_pos_rows)
                 lines.append("")
 
             # ── Top Scored / Bottom Scored from last scoring pass ──
+            # These are the COMPOSITE SCORE rankings from the full stock universe,
+            # NOT P&L-based — shows which stocks the model rates highest/lowest today.
             top_scored, bottom_scored = self._top_scored(top_n=5)
             if top_scored:
-                lines.append("── Top Picks (High Score) ──")
+                lines.append("── Top Picks (Highest Composite Score) ──")
                 for s in top_scored:
-                    lines.append(f"  {s.symbol:12s}  score={s.composite:.1f}  tech={s.technical:.1f}  mom={s.momentum:.1f}")
+                    sector = getattr(s, "sector", "")
+                    lines.append(
+                        f"  {s.symbol:12s}  [{sector:12s}]  "
+                        f"composite={s.composite:.1f}  "
+                        f"tech={s.technical:.1f}  fund={s.fundamental:.1f}  mom={s.momentum:.1f}"
+                    )
                 lines.append("")
             if bottom_scored:
-                lines.append("── Bottom Picks (Low Score) ──")
+                lines.append("── Bottom Picks (Lowest Composite Score) ──")
                 for s in bottom_scored:
-                    lines.append(f"  {s.symbol:12s}  score={s.composite:.1f}  tech={s.technical:.1f}  mom={s.momentum:.1f}")
+                    sector = getattr(s, "sector", "")
+                    lines.append(
+                        f"  {s.symbol:12s}  [{sector:12s}]  "
+                        f"composite={s.composite:.1f}  "
+                        f"tech={s.technical:.1f}  fund={s.fundamental:.1f}  mom={s.momentum:.1f}"
+                    )
                 lines.append("")
 
             mode = "DRY RUN" if self.config.dry_run else "LIVE"
             lines.append(f"Mode: {mode}")
 
-            subject = f"[TradingBot] EOD Summary {date.today().isoformat()} | P&L ₹{pnl:+.2f}"
+            subject = (
+                f"[TradingBot] EOD Summary {date.today().isoformat()} "
+                f"| Realized ₹{pnl:+.2f} | Unrealized ₹{unrealized_total:+.2f}"
+            )
             message = "\n".join(lines)
 
             sns.publish(TopicArn=topic_arn, Subject=subject, Message=message)

@@ -1,6 +1,6 @@
 # NSE Algorithmic Trading Bot
 
-A fully automated, score-driven equity trading bot for the Indian stock market (NSE), built on the Groww brokerage API. Every tick, it scores all 2,117 NSE-listed EQ-series stocks using four independent pillars — technical analysis, fundamental analysis, price momentum, and live news sentiment via FinBERT — and places buy/sell orders on Groww when the composite score crosses configurable thresholds.
+A fully automated, score-driven equity trading bot for the Indian stock market (NSE), built on the Groww brokerage API. Every tick, it scores all 2,117 NSE-listed EQ-series stocks across five pillars — technical analysis, fundamental analysis, price momentum, live news sentiment via FinBERT, and an intraday pulse — then applies a statistical entry quality gate before buying, and uses ATR + Value-at-Risk derived exit levels to maximise the profit captured between entry and exit.
 
 ---
 
@@ -21,15 +21,30 @@ A fully automated, score-driven equity trading bot for the Indian stock market (
    - [IntraDay Pulse](#intraday-pulse)
    - [News Sentiment — FinBERT](#news-sentiment--finbert)
    - [Composite Score Formula](#composite-score-formula)
-5. [Sector-Specific Tuning](#sector-specific-tuning)
-6. [Market Hours Behaviour](#market-hours-behaviour)
-7. [Dynamic Position Sizing](#dynamic-position-sizing)
-8. [Risk Controls](#risk-controls)
-9. [Project Structure](#project-structure)
-10. [Setup & Running](#setup--running)
-11. [EC2 Deployment](#ec2-deployment)
-12. [Full Configuration Reference](#full-configuration-reference)
-13. [Customising Your Strategy](#customising-your-strategy)
+5. [Entry Quality — Optimal Entry Timing](#entry-quality--optimal-entry-timing)
+   - [Score Velocity & Acceleration](#score-velocity--acceleration)
+   - [Price Entry Quality](#price-entry-quality)
+   - [Volume Confirmation at Entry](#volume-confirmation-at-entry)
+   - [Market Regime Filter](#market-regime-filter)
+   - [Optimal Entry Price — ATR Limit Orders](#optimal-entry-price--atr-limit-orders)
+   - [Entry Quality Formula](#entry-quality-formula)
+6. [Statistical Exit Signals — Maximising Profit](#statistical-exit-signals--maximising-profit)
+   - [Why Percentage Stops Are Wrong](#why-percentage-stops-are-wrong)
+   - [ATR-Based Stop-Loss](#atr-based-stop-loss)
+   - [Historical Value at Risk (VaR)](#historical-value-at-risk-var)
+   - [Chandelier Exit — Trailing Stop](#chandelier-exit--trailing-stop)
+   - [Take-Profit via Risk:Reward Ratio](#take-profit-via-riskreward-ratio)
+   - [Score-Based & Emergency Exits](#score-based--emergency-exits)
+   - [Exit Priority Order](#exit-priority-order)
+7. [Sector-Specific Tuning](#sector-specific-tuning)
+8. [Market Hours Behaviour](#market-hours-behaviour)
+9. [Dynamic Position Sizing](#dynamic-position-sizing)
+10. [Risk Controls](#risk-controls)
+11. [Project Structure](#project-structure)
+12. [Setup & Running](#setup--running)
+13. [EC2 Deployment](#ec2-deployment)
+14. [Full Configuration Reference](#full-configuration-reference)
+15. [Customising Your Strategy](#customising-your-strategy)
 
 ---
 
@@ -42,10 +57,14 @@ graph TD
     B["Data Cache\nParquet OHLCV · JSON fundamentals"] -->|warm daily candles| C
     C["Scoring Engine\nPass 1 — all 2,117 stocks\nTechnical + Fundamental + Momentum"] -->|top-50 candidates| D
     D["Pass 2 — News Sentiment\nFinBERT NLP · keyword events · recency decay"] -->|final composite score| E
-    E["Strategy Layer\nBUY ≥ 70 · HOLD 40–70 · SELL < 40"] -->|signals| F
+    H["IntraDay Pulse\nlive LTP · volume pace · range position"] -->|±20% nudge during market hours| E
+    E["Composite Score 0–100"] -->|score ≥ 70| EQ
+    EQ["Entry Quality Gate\nScore velocity · Price entry · Volume · Regime\nATR limit order"] -->|qualified| F
+    EQ -->|rejected| SK["Skip this tick\nwait for better setup"]
     F["Risk Gate\nposition cap · daily loss cap · dynamic sizing"] -->|approved orders| G
     G["Groww API\nlive trading or dry-run simulation"]
-    H["IntraDay Pulse\nlive LTP · volume pace · range position"] -->|±20% nudge during market hours| E
+    G -->|open positions| EX
+    EX["Statistical Exit Engine\nATR Stop + VaR Stop · Chandelier Trail\nTake-Profit R:R · Score Exit"] -->|exit signals| G
     I["AWS SNS"] -->|EOD email summary| J["Your Email Inbox"]
     G -->|SIGTERM shutdown hook| I
 ```
@@ -57,10 +76,11 @@ graph TD
 | **NSE India (nselib / nsepy)** | Primary source of truth — 2,117 EQ-series symbols, daily OHLCV candles, company fundamentals. If the NSE API returns 403 (common on AWS IPs), the bot automatically falls back to yfinance (Yahoo Finance's NSE mirror). |
 | **Data Cache** | Parquet files for OHLCV (one file per symbol, ~1 year of daily candles), JSON files for fundamentals. Only downloads what's stale — cold start takes 5–15 minutes, warm ticks take seconds. |
 | **Scoring Engine** | Two-pass scorer. Pass 1 scores all 2,117 stocks using technical + fundamental + momentum — takes about 4 seconds. Pass 2 runs FinBERT news analysis only on the top-50 candidates — takes 2–4 minutes. |
-| **IntraDay Pulse** | A fifth pillar, active only when the NSE market is open (09:15–15:30 IST). Uses the same-day candle data (day return, range position, volume pace, open distance) to capture whether a stock is rallying or collapsing right now. |
-| **Strategy Layer** | Converts the ranked score list into concrete BUY/SELL signals. Enforces idempotency — won't double-buy a stock already held or already queued. Skips signals if risk limits are breached. |
+| **IntraDay Pulse** | A fifth pillar, active only when the NSE market is open (09:15–15:30 IST). Uses same-day candle data (day return, range position, volume pace, open distance) to capture whether a stock is rallying or collapsing right now. |
+| **Entry Quality Gate** | Before any BUY is placed, five statistical filters are applied: score velocity (is the score rising or falling through the threshold?), price entry quality (RSI, Bollinger %B, distance from ATR support), volume confirmation, market regime, and an ATR-based limit order for better fill prices. Stocks failing any filter are skipped this tick. |
+| **Statistical Exit Engine** | Each held position has dynamically computed exit levels — ATR-based stop-loss, Historical VaR stop, Chandelier trailing stop (LeBeau 1999), and a take-profit at a fixed R:R ratio. No hardcoded percentages — a volatile stock gets a wider stop automatically; a stable stock gets a tighter one. |
 | **Risk Gate** | Hard guardrails: max simultaneous holdings, max daily loss, max quantity per order. Dynamic position sizing computes the right share count from your live wallet balance. |
-| **Groww API** | Executes real CNC (delivery) orders in live mode, or logs simulated fills in dry-run mode. |
+| **Groww API** | Executes real CNC (delivery) orders (MARKET or LIMIT) in live mode, or logs simulated fills in dry-run mode. |
 | **AWS SNS** | On shutdown (triggered by EC2 stop → SIGTERM), the bot sends a full EOD summary email — orders placed, realized P&L, open positions, top gainers, top losers. |
 
 ---
@@ -121,15 +141,27 @@ The top-50 stocks by composite score from Pass 1 go through a second, slower pas
 
 **Sentiment blending** — the final sentiment score (0–100, where 50 = perfectly neutral) is blended into the composite using a delta formula. A neutral score of exactly 50 produces zero delta — no change to the composite. Only meaningful positive or negative news moves the needle.
 
-### 5. Strategy — Signal Generation
+### 5. Strategy — Entry Quality Gate & Signal Generation
 
-The `ScoreBasedStrategy` iterates over the final ranked list and generates signals:
+**Score velocity update** — every tick, the composite score for each symbol is appended to a rolling 10-tick history. This history is used immediately in the entry quality gate.
 
-**BUY logic:** If a stock's composite score ≥ `SCORE_BUY_THRESHOLD` (default 70), the bot is not already holding it, has not already queued a buy for it this tick, and the total holdings would not exceed `RISK_MAX_HOLDINGS` — a BUY signal is generated.
+**BUY candidates** — any stock with composite score ≥ `SCORE_BUY_THRESHOLD` (default 70) that the bot doesn't already hold is a candidate. But rather than buying immediately, each candidate is passed through the Entry Quality Gate:
 
-**SELL logic:** For every currently held position, if the stock's composite score has dropped below `SCORE_SELL_THRESHOLD` (default 40), a SELL signal is generated.
+1. **Score velocity check** — the last N scores are fitted with a linear regression. A negative slope means the score is *falling through* the threshold — the stock is declining, not improving. These are rejected outright. Only stocks with a rising or flat-rising score progress. Positive acceleration (the slope itself is increasing) gets a quality bonus.
 
-**Quantity calculation:** For each BUY signal, `compute_quantity()` is called. In dynamic sizing mode (`RISK_DYNAMIC_SIZING=true`), it fetches the live CNC balance from Groww, multiplies by `RISK_DEPLOY_FRACTION` (default 90%), divides by the number of remaining open slots to spread capital evenly, then divides by the live LTP to get the number of shares. In dry-run mode, `RISK_DRY_RUN_BALANCE` is used instead of the real wallet.
+2. **Price entry quality** — three sub-indicators check whether the current price is a good entry point: RSI (ideally below 55 — not overbought at the moment of entry), Bollinger %B (ideally below 0.55 — buying near the lower half of the band, not extended), and distance from ATR-based support (closer to SMA20 = more upside available). A stock scoring 74 but already up 6% on the day with RSI=72 is a poor entry — too late, too little room left.
+
+3. **Volume confirmation** — if today's volume is below `ENTRY_VOL_MIN_RATIO` (default 80%) of the 20-day average, the signal is rejected. Thin-volume moves lack institutional conviction and are more likely to reverse. The volume *trend* over the last 5 days also contributes — rising volume is a positive signal.
+
+4. **Market regime** — the fraction of all 2,117 NSE stocks with composite score > 50 is computed in real time. If fewer than `ENTRY_BULL_RATIO_MIN` (default 40%) of the market is bullish, no new BUY signals are generated regardless of individual stock scores. Buying individual stocks in a broad bear market dramatically reduces win rate.
+
+5. **Composite entry quality score** — velocity, price, volume, and regime sub-scores are weighted into a single 0–100 quality index. If the index is below `ENTRY_MIN_QUALITY` (default 55), the signal is skipped this tick and re-evaluated next tick.
+
+6. **Optimal entry price** — if quality is high (≥ 80), a MARKET order is placed immediately. For medium quality (55–80), a LIMIT order is placed at `ltp − entry_pullback_mult × ATR`. Small intraday pullbacks occur frequently; catching one gives a better fill price, which directly increases the profit margin. If the limit is not filled within `ENTRY_LIMIT_TIMEOUT_TICKS` (default 3 ticks), it is cancelled and a market order is placed instead.
+
+**SELL logic** — for every held position, the statistical exit engine evaluates five conditions on every tick (see the Statistical Exit Signals section for full detail). Score < threshold alone never triggers a sell at a loss.
+
+**Quantity calculation** — for each BUY signal, `compute_quantity()` is called. In dynamic sizing mode, it fetches the live CNC balance from Groww, multiplies by `RISK_DEPLOY_FRACTION` (default 90%), divides by the number of remaining open slots to spread capital evenly, then divides by the live LTP to get the number of shares. In dry-run mode, `RISK_DRY_RUN_BALANCE` is used instead of the real wallet.
 
 ### 6. Order Placement
 
@@ -511,6 +543,313 @@ Step 4 — Clip to [0, 100]
 
 ---
 
+## Entry Quality — Optimal Entry Timing
+
+The core problem with a naive "score ≥ 70 → buy at market" rule is that it ignores *when* in a move you are entering. Consider two stocks both scoring 74:
+
+- **Stock A:** scores were `[60, 64, 68, 71, 74]` — rising steadily. You are entering early in a developing move. The full upside is still ahead.
+- **Stock B:** scores were `[88, 84, 80, 76, 74]` — falling. You are buying a stock that was great two ticks ago but is now deteriorating. The score may cross the sell threshold on the next tick.
+
+The entry quality system filters these cases apart using five statistical methods before any BUY signal is generated.
+
+### Score Velocity & Acceleration
+
+**Origin:** Jegadeesh & Titman's momentum research (1993) showed that not just the level of performance but the *change* in performance predicts near-term continuation. A stock improving on multiple dimensions simultaneously (score accelerating upward) is in a regime transition — the kind of move that produces the largest entry-to-exit profit windows.
+
+**Method:** The last N composite scores for a symbol are fitted with a linear regression (ordinary least squares). The slope is the velocity — score points per tick. A second-order polynomial fit gives the acceleration — whether the velocity itself is increasing.
+
+```
+score_history = [60, 64, 68, 71, 74]    (5 ticks)
+x             = [0, 1, 2, 3, 4]
+
+linear fit:     score(t) = 3.5t + 59.0
+velocity        = +3.5 pts/tick  ✓ (rising)
+
+quad fit:       score(t) = 0.1t² + 3.3t + 59.2
+acceleration    = +0.2  ✓ (velocity itself increasing = accelerating improvement)
+```
+
+A negative velocity (score is falling) causes the entry to be **rejected outright**, regardless of the current score level. A score of 74 falling from 88 is not a buy — it is an exit from an old signal.
+
+**Scoring:** Velocity maps from 0 pts/tick (score 50) to +5 pts/tick (score 100). Positive acceleration adds a bonus; deceleration penalises.
+
+---
+
+### Price Entry Quality
+
+**Origin:** John Bollinger and Welles Wilder both emphasised that *where* you enter within a move is as important as *identifying* the move. Buying an overbought stock near the top of its Bollinger Bands leaves minimal room to the take-profit target. Buying an oversold stock near the lower band maximises the available upside before the exit is triggered.
+
+**Method:** Three sub-indicators assess the current price's entry quality:
+
+**RSI at entry:** An RSI below 50 at the moment of entry means the stock is temporarily oversold while its composite score is improving — the ideal combination. You are buying weakness on a structurally strong setup.
+```
+RSI ≤ 40 (deeply oversold + high score) → entry_rsi_score = 100  ← best possible entry
+RSI 40–55 (mildly oversold)             → entry_rsi_score = 70–100
+RSI 55–70 (neutral to extended)         → entry_rsi_score = 0–70
+RSI > 70  (overbought — chasing)        → entry_rsi_score = 0    ← reject
+```
+
+**Bollinger %B at entry:** Buying near the lower Bollinger band means the stock is statistically cheap relative to its own recent volatility. There is more room to the upper band (mean reversion upside) than if you buy at the midpoint or upper band.
+```
+%B ≤ 0.20 (near lower band) → bb_score = 100
+%B ≤ 0.55 (below midband)   → bb_score = 60–100
+%B > 0.55 (extended)        → bb_score falling → 0 near upper band
+```
+
+**Distance from ATR support:** The current price's distance from the 20-day SMA, normalised by ATR.
+```
+At or below SMA20           → score = 100  (buying near natural support)
+1 ATR above SMA20           → score = 60
+2 ATRs above SMA20          → score = 20   (extended, risky entry)
+3+ ATRs above SMA20         → score = 0    (chasing)
+```
+
+---
+
+### Volume Confirmation at Entry
+
+**Origin:** Richard Wyckoff's *Stock Market Technique* (1931) described the "composite operator" — the aggregate of institutional investors. Wyckoff showed that genuine accumulation occurs on expanding volume; moves on thin volume are traps. Joseph Granville formalised this as OBV (1963): volume precedes price.
+
+**Method:** If today's volume is below `ENTRY_VOL_MIN_RATIO` (default 80%) of the 20-day average, the entry is rejected regardless of score. A low-volume price move lacks the institutional backing needed to sustain the trend.
+
+```
+vol_ratio < 0.80            → reject (ghost move — likely to reverse)
+vol_ratio 1.0               → volume_score = 60  (on-pace)
+vol_ratio 2.0               → volume_score = 100 (institutional surge)
+vol_trend rising (5d slope) → +10 bonus
+```
+
+---
+
+### Market Regime Filter
+
+**Origin:** Mebane Faber's 2007 paper *A Quantitative Approach to Tactical Asset Allocation* (Journal of Investment Management) showed that a simple rule — only buy when the asset's price is above its 10-month SMA — eliminated most bear market losses across five asset classes and 100+ years of data. Lo & MacKinlay (1988) documented that stock returns have positive autocorrelation at short horizons — regimes persist.
+
+**Method:** Rather than fetching a separate index time series, the bot uses the current tick's already-computed universe scores as a real-time regime indicator. The `bull_ratio` — the fraction of all 2,117 NSE stocks with composite score > 50 — is a sensitive, live proxy for broad market health.
+
+```
+bull_ratio < 0.40  → broad bear market → reject ALL new BUY signals this tick
+bull_ratio 0.50    → regime_score = 40  (cautious)
+bull_ratio 0.55    → regime_score = 60  (healthy)
+bull_ratio 0.65+   → regime_score = 100 (strong bull participation)
+```
+
+This filter alone prevents the most destructive scenario: buying individual stocks during a broad market correction. When 60%+ of NSE stocks are deteriorating, the smartest action is no new entries.
+
+---
+
+### Optimal Entry Price — ATR Limit Orders
+
+**Origin:** Van Tharp's *Trade Your Way to Financial Freedom* (1998) introduced the concept of R — the risk per trade, defined as the distance from entry to stop-loss in rupees. Van Tharp's key insight: **R is determined entirely by entry price**. If the stop-loss is at ₹1,580 and you enter at ₹1,600, R = ₹20. If you enter at ₹1,592 (a small pullback), R = ₹12 — but your take-profit is also further away in R multiples, so you realise a larger profit on the same setup.
+
+**Method:** After a candidate passes all four quality filters, the entry price is determined by the composite quality score:
+
+```
+Quality ≥ 80  → MARKET order immediately
+              (high conviction — don't risk missing a strong breakout)
+
+Quality 55–80 → LIMIT order at: ltp − quality_factor × entry_pullback_mult × ATR
+              quality_factor = 1.0 at quality=55, 0.0 at quality=80
+              (scale back the pullback target as quality improves)
+
+If the LIMIT is not filled within entry_limit_timeout_ticks → cancel, enter at MARKET
+```
+
+Small intraday pullbacks of 0.3–1.0 ATR occur on the majority of qualifying setups. When the limit fills, the effective stop distance is the same in ₹ but the take-profit is now further away — every rupee saved at entry is a rupee of additional profit at exit.
+
+---
+
+### Entry Quality Formula
+
+```
+entry_quality =
+    ENTRY_W_VELOCITY × velocity_score      (0.30)
+  + ENTRY_W_PRICE    × price_score         (0.35)   ← highest weight: price matters most
+  + ENTRY_W_VOLUME   × volume_score        (0.15)
+  + ENTRY_W_REGIME   × regime_score        (0.20)
+
+All sub-scores are 0–100.
+entry_quality < ENTRY_MIN_QUALITY (55) → skip this tick
+```
+
+**Example — same score, very different entry quality:**
+
+| Attribute | Stock A (entry quality 81) | Stock B (entry quality 24) |
+|-----------|---------------------------|---------------------------|
+| Score | 74 | 74 |
+| Score history | 60→64→68→71→74 (rising) | 88→84→80→76→74 (falling) |
+| RSI at entry | 47 (oversold + improving) | 71 (overbought) |
+| Bollinger %B | 0.29 (near lower band) | 0.84 (near upper band) |
+| Volume | 1.6× average | 0.55× average |
+| Market | 58% bullish | 58% bullish |
+| **Decision** | **BUY — LIMIT order** | **SKIP** |
+
+Stock A gives the bot maximum room between entry and exit. Stock B has already priced in most of the move.
+
+---
+
+## Statistical Exit Signals — Maximising Profit
+
+### Why Percentage Stops Are Wrong
+
+A fixed 3% stop-loss is deeply flawed: it applies the same tolerance to every stock regardless of how much that stock normally moves in a day. HDFC Bank's average daily range is ~0.8% — a 3% stop is 3.75 standard deviations away, which almost never gets hit. You'll hold a true loser too long. Adani Ports' average daily range is ~2.5% — a 3% stop is frequently triggered by normal intraday noise. You'll get stopped out of good positions constantly.
+
+The solution: let each stock's own historical price distribution determine the stop level. A volatile stock gets a wider stop automatically. A stable stock gets a tighter one. This is how professional traders and quant desks have operated since the early 1980s.
+
+---
+
+### ATR-Based Stop-Loss
+
+**Origin:** Wilder introduced the Average True Range in *New Concepts in Technical Trading Systems* (1978). The True Range extends the simple High−Low to account for gaps: `TR = max(High−Low, |High−PrevClose|, |Low−PrevClose|)`. ATR is the Wilder-smoothed (EMA) average of TR over 14 days. It measures the stock's *natural* daily volatility in absolute price terms.
+
+**Method:**
+```
+ATR(14) = Wilder EMA of True Range over 14 days
+
+stop_loss = avg_buy_price − EXIT_ATR_STOP_MULT × ATR
+```
+
+The multiplier (default 2.0) means the stop is placed 2 "natural days of movement" below your entry. Normal volatility cannot trigger this stop; only an abnormal adverse move does.
+
+**Example:**
+```
+HDFC Bank: avg daily range ≈ ₹13, ATR ≈ ₹11
+  stop = ₹1,620 − 2 × ₹11 = ₹1,598  (−1.4% from entry)
+
+Adani Ports: avg daily range ≈ ₹35, ATR ≈ ₹29
+  stop = ₹1,380 − 2 × ₹29 = ₹1,322  (−4.2% from entry)
+```
+
+A fixed 3% stop would be far too tight for HDFC Bank (would trigger on noise) and slightly too tight for Adani Ports. ATR automatically calibrates.
+
+---
+
+### Historical Value at Risk (VaR)
+
+**Origin:** VaR was formalised by JP Morgan's RiskMetrics group in the early 1990s (published in their 1994 technical document) and has since become the standard risk measurement framework used by every major bank and fund globally. Philippe Jorion's *Value at Risk* (1997, 3rd ed. 2006) is the definitive academic reference.
+
+**Two methods are computed and the tighter (most conservative) is used:**
+
+**Parametric VaR (Normal distribution fit):**
+```
+Returns = daily log-returns over the last 252 trading days
+μ, σ    = mean and standard deviation of these returns
+
+z_score = scipy.stats.norm.ppf(0.05) = −1.645   (95% confidence, 5th percentile)
+VaR_1d  = z_score × σ + μ                        (in % terms, negative number)
+stop    = avg_buy_price × (1 + VaR_1d)
+
+Interpretation: historically, only 5% of days had a larger daily loss.
+```
+
+**Historical (Non-parametric) VaR:**
+```
+Returns = sorted daily log-returns over last 252 days
+stop    = avg_buy_price × (1 + percentile(returns, 5))
+
+No distribution assumption — uses the raw empirical histogram.
+More conservative when the return distribution has fat tails (common in NSE small-caps).
+```
+
+**Blending:**
+```
+stop_loss = max(ATR_stop, parametric_VaR_stop, empirical_VaR_stop)
+            ← the highest floor = tightest stop = smallest possible loss
+```
+
+The stop can never be placed above the entry price (that would trigger immediately). A safety cap of −0.5% is enforced as a minimum distance.
+
+---
+
+### Chandelier Exit — Trailing Stop
+
+**Origin:** Chuck LeBeau — one of the most respected technical analysts in the United States — presented the Chandelier Exit at the 1999 Managed Futures Association Fall Conference. The name comes from the image of the stop "hanging from the ceiling" (the highest price since entry), just as a chandelier hangs from the ceiling of a room. As price rises and raises the ceiling, the stop rises with it. It can never go lower. LeBeau's default multiplier of 3.0 ATR gives the position enough breathing room to stay in strong trends.
+
+**Method:**
+```
+peak_price    = highest LTP seen since entry (updated every tick)
+trail_level   = peak_price − EXIT_ATR_CHANDELIER_MULT × ATR(14)
+
+Sell if: LTP ≤ trail_level AND position is up ≥ EXIT_TRAILING_ACTIVATION_PCT
+```
+
+The activation threshold (default 2%) prevents the trailing stop from triggering before you have accumulated a meaningful gain. Once activated, the stop rises with every new peak but never falls.
+
+**Example — RELIANCE entry ₹1,000, ATR = ₹18, chandelier mult = 3.0:**
+```
+Day 1: LTP ₹1,010 → peak=₹1,010 → trail = ₹1,010 − ₹54 = ₹956  (not yet activated, need +2%)
+Day 3: LTP ₹1,025 → peak=₹1,025 → trail = ₹971  (now activated: +2.5%)
+Day 7: LTP ₹1,080 → peak=₹1,080 → trail = ₹1,026 ← stop has risen, locking in ₹26/share
+Day 9: LTP ₹1,055 → peak still ₹1,080 → trail = ₹1,026 → ₹1,055 > ₹1,026 → hold
+Day 11: LTP ₹1,020 → ₹1,020 ≤ ₹1,026 → CHANDELIER STOP fires → sell at ₹1,020
+
+Profit captured: ₹1,020 − ₹1,000 = ₹20/share (84% of the ₹80 peak gain locked)
+Without trailing stop: might have held to ₹960 on further decline = loss
+```
+
+---
+
+### Take-Profit via Risk:Reward Ratio
+
+**Origin:** Van Tharp's R-multiples framework (*Trade Your Way to Financial Freedom*, 1998). Van Tharp argued that every trade should be evaluated as a multiple of R (initial risk). A 2R trade means you made 2× what you risked. For a strategy to be profitable in expectation, the average win must be a multiple of the average loss.
+
+**Method:**
+```
+stop_distance = avg_buy_price − stop_loss          (in ₹)
+take_profit   = avg_buy_price + EXIT_RISK_REWARD_RATIO × stop_distance
+
+EXIT_RISK_REWARD_RATIO = 2.0 → for every ₹1 risked, target ₹2 profit
+```
+
+This ensures the strategy has positive expected value even with a 40% win rate:
+```
+Expected value = 0.40 × (2R) − 0.60 × (1R) = 0.80R − 0.60R = +0.20R per trade ✓
+```
+
+The take-profit and Chandelier stop work together: the take-profit locks in gains on fast moves; the Chandelier stop captures slow, grinding trends that may go well past the initial TP target (the bot doesn't exit at TP if the Chandelier stop hasn't triggered yet on a stock still trending).
+
+---
+
+### Score-Based & Emergency Exits
+
+Once the statistical exits have been computed, two additional exits apply:
+
+**Score exit (profit-only):** If the composite score drops below `SCORE_SELL_THRESHOLD` (default 40) *and* the position is currently in profit (LTP > avg_buy_price), the bot exits. The score deterioration signals the underlying setup has weakened; since you're in profit, this is a clean, risk-free exit.
+
+**Key property: score exit NEVER sells at a loss.** A score dropping from 74 to 38 while the stock is down 1% does not trigger a sell. The stop-loss handles loss exits. The score exit is only for profitable positions — it is an "early out while you're ahead" signal.
+
+**Emergency exit:** If the composite score collapses below `SCORE_EMERGENCY_SELL_THRESHOLD` (default 20), the bot exits regardless of P&L. A score of 18 means the setup has fundamentally broken down across all dimensions simultaneously — technical, fundamental, momentum, and sentiment. This is not normal noise; it is a regime change. In this case, accepting a small loss now prevents a much larger loss later.
+
+---
+
+### Exit Priority Order
+
+On every tick, for every held position, the following checks are evaluated in strict priority order — the first one that triggers generates the SELL signal:
+
+```
+1. ATR/VaR Stop-Loss     ltp ≤ stop_loss
+   Computed per-stock from ATR and return distribution.
+   Fires even at a loss. This is the loss cap.
+
+2. Take-Profit           ltp ≥ take_profit
+   = avg_buy_price + EXIT_RISK_REWARD_RATIO × stop_distance
+   Locks in profit on fast-moving stocks.
+
+3. Chandelier Trail      trail_armed AND ltp ≤ trail_level
+   = peak_price − EXIT_ATR_CHANDELIER_MULT × ATR
+   Arms after +EXIT_TRAILING_ACTIVATION_PCT % gain.
+   Captures slow grinders and protects accumulated profit.
+
+4. Score Exit (profit)   score < SCORE_SELL_THRESHOLD AND pnl_pct > 0
+   Clean exit on weakening setup while in profit.
+   Never fires at a loss.
+
+5. Emergency Exit        score < SCORE_EMERGENCY_SELL_THRESHOLD
+   Fires even at a loss. Regime has completely broken down.
+```
+
+---
+
 ## Sector-Specific Tuning
 
 Different industries have structurally different financial profiles, and a uniform scoring approach produces systematically wrong results. A P/E of 30 is cheap for an IT compounder like TCS; it would be expensive for a PSU bank. A high D/E ratio disqualifies a manufacturing company but is irrelevant for a bank (deposits are liabilities by nature, not debt). The bot applies sector-specific overrides at both the pillar level (how much weight goes to technical vs fundamental vs momentum) and the sub-indicator level (which fundamental metrics matter most within the fundamental pillar).
@@ -684,8 +1023,13 @@ TradingBot/
 │           └── consumer.py   # tech=40% fund=38% mom=22%
 │
 ├── strategies/
-│   └── score_based.py        # Signal generation: BUY ≥ 70, SELL < 40
-│                             # Idempotency, slot management, dynamic qty
+│   ├── score_based.py        # Signal generation: BUY ≥ 70, SELL < 40
+│   │                         # Entry quality gate, slot management, dynamic qty
+│   ├── entry_signals.py      # Entry quality engine (score velocity, price quality,
+│   │                         # volume confirmation, market regime, ATR limit orders)
+│   └── exit_signals.py       # Statistical exit levels per position
+│                             # ATR stop · parametric VaR · empirical VaR
+│                             # Chandelier trailing stop · R:R take-profit
 │
 ├── cache/                    # Auto-created at runtime
 │   ├── universe.json         # 2,117 symbols + sector mapping (tracked in git)
@@ -933,6 +1277,37 @@ Banking, IT, and Pharma each have their own full override sets — `WEIGHT_FUND_
 | `INTRADAY_W_RANGE_POSITION` | `0.30` | Sub-weight: LTP position within today's high-low range |
 | `INTRADAY_W_VOLUME_PACE` | `0.25` | Sub-weight: volume vs expected for session elapsed |
 | `INTRADAY_W_OPEN_DISTANCE` | `0.10` | Sub-weight: LTP vs today's open |
+
+### Entry Quality Controls
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENTRY_MIN_QUALITY` | `55.0` | Minimum composite entry quality (0–100). Below this → skip this tick. `70` = strict. |
+| `ENTRY_MIN_SCORE_VELOCITY` | `0.0` | Reject if score velocity (slope) is below this pts/tick. `0.0` = reject only if actively falling. |
+| `ENTRY_VELOCITY_WINDOW` | `5` | Ticks of score history for velocity/acceleration regression |
+| `ENTRY_RSI_IDEAL_MAX` | `55.0` | RSI at or below this at entry = "not overbought" = full RSI sub-score |
+| `ENTRY_BOLLINGER_B_MAX` | `0.55` | Bollinger %B at or below this = buying near lower half of band |
+| `ENTRY_VOL_MIN_RATIO` | `0.8` | Reject if today's volume < 80% of 20-day average |
+| `ENTRY_BULL_RATIO_MIN` | `0.40` | Reject all buys if fewer than 40% of NSE stocks have score > 50 |
+| `ENTRY_PULLBACK_MULT` | `0.5` | Limit order = ltp − MULT × ATR. `0.0` = always market orders. |
+| `ENTRY_LIMIT_TIMEOUT_TICKS` | `3` | Cancel limit and switch to market after this many unfilled ticks |
+| `ENTRY_W_VELOCITY` | `0.30` | Sub-weight: score velocity component |
+| `ENTRY_W_PRICE` | `0.35` | Sub-weight: price entry quality (RSI + %B + support distance) |
+| `ENTRY_W_VOLUME` | `0.15` | Sub-weight: volume confirmation |
+| `ENTRY_W_REGIME` | `0.20` | Sub-weight: market regime (bull ratio) |
+
+### Statistical Exit Controls
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EXIT_ATR_PERIOD` | `14` | ATR period (Wilder default). Used for stop-loss and chandelier trail. |
+| `EXIT_ATR_STOP_MULT` | `2.0` | Stop-loss = entry − MULT × ATR. Larger = wider stop for volatile stocks. |
+| `EXIT_ATR_CHANDELIER_MULT` | `3.0` | Chandelier trail = peak − MULT × ATR (LeBeau's default). |
+| `EXIT_RISK_REWARD_RATIO` | `2.0` | Take-profit = entry + R:R × stop_distance. `2.0` = target 2× what you risk. |
+| `EXIT_VAR_PERIOD` | `252` | VaR lookback in trading days (252 = 1 year). |
+| `EXIT_VAR_CONFIDENCE` | `0.05` | VaR confidence level. `0.05` = 95% confidence (5th percentile worst return). |
+| `EXIT_TRAILING_ACTIVATION_PCT` | `2.0` | Arm chandelier trail only after position is up this % from entry. |
+| `SCORE_EMERGENCY_SELL_THRESHOLD` | `20.0` | Sell even at a loss if score collapses below this (regime breakdown). |
 
 ---
 

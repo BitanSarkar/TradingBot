@@ -58,7 +58,19 @@ def _make_session() -> requests.Session:
         max_retries      = retry,
     )
     session = requests.Session()
-    session.headers["User-Agent"] = "Mozilla/5.0 (compatible; TradingBot/1.0)"
+    # Use a real browser UA — many Indian news CDNs / Google News block
+    # non-browser UAs, especially from cloud IP ranges.
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+    })
     session.mount("https://", adapter)
     session.mount("http://",  adapter)
     return session
@@ -200,7 +212,7 @@ class NewsFetcher:
 
     def _fetch_feed(self, url: str, source: NewsSource) -> list[Article]:
         try:
-            resp = _http.get(url, timeout=5)
+            resp = _http.get(url, timeout=8)
             resp.raise_for_status()
             feed = feedparser.parse(resp.content)
         except Exception as exc:

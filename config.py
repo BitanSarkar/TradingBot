@@ -66,6 +66,83 @@ class Config:
     max_quantity_per_order: int   = field(default_factory=lambda: _int  ("RISK_MAX_QTY_PER_ORDER", 10))
     quantity_per_trade:     int   = field(default_factory=lambda: _int  ("RISK_QUANTITY_PER_TRADE",1))
 
+    # ── Exit Controls — statistically-derived per-stock exit levels ───────────
+    #
+    # Exit levels are computed from each stock's own historical price distribution
+    # (ATR + VaR) rather than hardcoded percentages.  A volatile stock gets a
+    # wider stop automatically; a stable stock gets a tighter one.
+
+    # ATR period for True Range calculation (Wilder default = 14)
+    exit_atr_period:            int   = field(default_factory=lambda: _int  ("EXIT_ATR_PERIOD",            14))
+
+    # Stop-loss = entry − (exit_atr_stop_mult × ATR)
+    # Larger multiplier = wider stop = fewer false stops on volatile stocks
+    exit_atr_stop_mult:         float = field(default_factory=lambda: _float("EXIT_ATR_STOP_MULT",         2.0))
+
+    # Chandelier trailing stop = peak − (exit_atr_chandelier_mult × ATR)
+    # LeBeau's recommended value is 3.0
+    exit_atr_chandelier_mult:   float = field(default_factory=lambda: _float("EXIT_ATR_CHANDELIER_MULT",   3.0))
+
+    # Risk:Reward ratio — take-profit placed at this multiple of the stop distance
+    # e.g. 2.0 → if stop is ₹20 below entry, TP is ₹40 above entry
+    exit_risk_reward_ratio:     float = field(default_factory=lambda: _float("EXIT_RISK_REWARD_RATIO",     2.0))
+
+    # VaR lookback window in trading days (252 = 1 year)
+    exit_var_period:            int   = field(default_factory=lambda: _int  ("EXIT_VAR_PERIOD",            252))
+
+    # VaR confidence level — 0.05 = 95% confidence (5th percentile of returns)
+    # Lower = tighter stop (less tolerance for loss)
+    exit_var_confidence:        float = field(default_factory=lambda: _float("EXIT_VAR_CONFIDENCE",        0.05))
+
+    # Arm the Chandelier trailing stop only after the position is up this much %
+    exit_trailing_activation_pct: float = field(default_factory=lambda: _float("EXIT_TRAILING_ACTIVATION_PCT", 2.0))
+
+    # Score-based sell: only fires when already in profit (score < sell_threshold)
+    # For a total score collapse below this emergency level, sell even at a loss
+    score_emergency_sell_threshold: float = field(default_factory=lambda: _float("SCORE_EMERGENCY_SELL_THRESHOLD", 20.0))
+
+    # ── Entry Quality Controls ─────────────────────────────────────────────────
+    # Statistically-derived entry timing — ensures you enter early in a move,
+    # at a favourable price, with volume confirmation, in a healthy market.
+    # See strategies/entry_signals.py for full documentation.
+
+    # Minimum composite entry quality score (0–100) to generate a BUY signal.
+    # Below this threshold the tick is skipped — wait for a better setup.
+    entry_min_quality:          float = field(default_factory=lambda: _float("ENTRY_MIN_QUALITY",           55.0))
+
+    # Reject if the composite score's velocity (rate of change) is below this.
+    # 0.0 = reject only if score is actively falling.
+    # 0.5 = require the score to be rising at ≥ 0.5 pts/tick.
+    entry_min_score_velocity:   float = field(default_factory=lambda: _float("ENTRY_MIN_SCORE_VELOCITY",    0.0))
+
+    # Score history window (ticks) used for velocity/acceleration regression.
+    entry_velocity_window:      int   = field(default_factory=lambda: _int  ("ENTRY_VELOCITY_WINDOW",       5))
+
+    # RSI at or below this is considered a "good entry" (not overbought).
+    entry_rsi_ideal_max:        float = field(default_factory=lambda: _float("ENTRY_RSI_IDEAL_MAX",         55.0))
+
+    # Bollinger %B at or below this is a "good entry" (price near lower band).
+    entry_bollinger_b_max:      float = field(default_factory=lambda: _float("ENTRY_BOLLINGER_B_MAX",       0.55))
+
+    # Reject if today's volume < this fraction of 20-day average.
+    entry_vol_min_ratio:        float = field(default_factory=lambda: _float("ENTRY_VOL_MIN_RATIO",         0.8))
+
+    # Reject if fewer than this fraction of universe stocks have score > 50.
+    entry_bull_ratio_min:       float = field(default_factory=lambda: _float("ENTRY_BULL_RATIO_MIN",        0.40))
+
+    # Limit order pullback: place limit at `ltp − mult × ATR` for medium-quality entries.
+    # 0.0 = always use market orders (faster, but worse average fill price).
+    entry_pullback_mult:        float = field(default_factory=lambda: _float("ENTRY_PULLBACK_MULT",         0.5))
+
+    # Cancel limit order and switch to market after this many ticks with no fill.
+    entry_limit_timeout_ticks:  int   = field(default_factory=lambda: _int  ("ENTRY_LIMIT_TIMEOUT_TICKS",   3))
+
+    # Sub-weights for entry quality composite (must sum to 1.0)
+    entry_w_velocity:           float = field(default_factory=lambda: _float("ENTRY_W_VELOCITY",            0.30))
+    entry_w_price:              float = field(default_factory=lambda: _float("ENTRY_W_PRICE",               0.35))
+    entry_w_volume:             float = field(default_factory=lambda: _float("ENTRY_W_VOLUME",              0.15))
+    entry_w_regime:             float = field(default_factory=lambda: _float("ENTRY_W_REGIME",              0.20))
+
     # ── Position Sizing ───────────────────────────────────────────────────────
     # deploy_fraction: fraction of available CNC balance to spread across holdings
     #   e.g. 0.90 → use 90% of wallet, keep 10% as buffer

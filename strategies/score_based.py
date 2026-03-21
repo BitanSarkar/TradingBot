@@ -22,6 +22,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from strategies.base import BaseStrategy, Signal, TradeSignal
+from strategies.entry_signals import ScoreHistory, compute_entry_quality
 
 if TYPE_CHECKING:
     from scoring.engine import ScoringEngine
@@ -60,6 +61,10 @@ class ScoreBasedStrategy(BaseStrategy):
         self._engine    = engine
         # Stores the last scored list so print_score_table() / REPL can inspect it
         self.last_scores: list = []
+        # Rolling score history per symbol — used for velocity/acceleration at entry
+        self._score_history = ScoreHistory(window=10)
+        # Pending limit orders: symbol → ticks_waiting (cancel after timeout)
+        self._pending_limits: dict[str, int] = {}
 
     @property
     def fetcher(self) -> "DataFetcher":
@@ -111,54 +116,189 @@ class ScoreBasedStrategy(BaseStrategy):
         scores = self._engine.run(symbols)
         self.last_scores = scores
 
+        # Update rolling score history for velocity/acceleration analysis
+        self._score_history.update_batch(scores)
+
         # Log top 5 / bottom 5
         self._log_scores(scores)
 
         signals: list[TradeSignal] = []
+        cfg = self.config
+
+        # All current composite scores (for market regime calculation)
+        universe_scores = [s.composite for s in scores]
 
         # ---- BUY candidates (top-N scoring stocks) ----
         buy_candidates = [
-            s for s in scores[: self.config.score_top_n]
-            if s.composite >= self.config.score_buy_threshold
+            s for s in scores[: cfg.score_top_n]
+            if s.composite >= cfg.score_buy_threshold
         ]
         # effective_holdings = confirmed positions + pending BUY orders
-        # This prevents generating a second BUY signal for a stock that was
-        # just ordered but not yet filled (T+1 settlement / pending order)
         effective_holdings = self.positions.effective_holdings()
+
+        # Age out stale pending limits
+        for sym in list(self._pending_limits):
+            self._pending_limits[sym] += 1
+            if self._pending_limits[sym] > cfg.entry_limit_timeout_ticks:
+                del self._pending_limits[sym]
+                self.log.info(
+                    "LIMIT TIMEOUT for %s — switching to market order next tick", sym
+                )
 
         for candidate in buy_candidates:
             if candidate.symbol in effective_holdings:
-                continue  # already holding or pending
-            if len(effective_holdings) + len(signals) >= self.config.max_holdings:
-                break     # at capacity
+                continue
+            if len(effective_holdings) + len(signals) >= cfg.max_holdings:
+                break
 
-            # open_slots = remaining capacity across holdings + already queued signals
-            open_slots = self.config.max_holdings - len(effective_holdings) - len(signals)
+            open_slots = cfg.max_holdings - len(effective_holdings) - len(signals)
             qty = self.orders.compute_quantity(candidate.symbol, open_slots)
             if qty < 1:
-                continue  # can't afford even 1 share — skip
+                continue
+
+            # ── Entry quality gate ──────────────────────────────────────────
+            ltp     = self._fetcher.get_ltp(candidate.symbol)
+            df      = self._fetcher._cache.load_ohlcv(candidate.symbol)
+            history = self._score_history.get(candidate.symbol)
+
+            entry = compute_entry_quality(
+                df                    = df,
+                current_score         = candidate.composite,
+                score_history         = history,
+                universe_scores       = universe_scores,
+                current_ltp           = ltp if ltp > 0 else 0.0,
+                min_score_velocity    = cfg.entry_min_score_velocity,
+                velocity_window       = cfg.entry_velocity_window,
+                rsi_ideal_max         = cfg.entry_rsi_ideal_max,
+                bollinger_b_ideal_max = cfg.entry_bollinger_b_max,
+                vol_min_ratio         = cfg.entry_vol_min_ratio,
+                bull_ratio_min        = cfg.entry_bull_ratio_min,
+                atr_period            = cfg.exit_atr_period,
+                entry_pullback_mult   = cfg.entry_pullback_mult,
+                min_quality_score     = cfg.entry_min_quality,
+                w_velocity            = cfg.entry_w_velocity,
+                w_price               = cfg.entry_w_price,
+                w_volume              = cfg.entry_w_volume,
+                w_regime              = cfg.entry_w_regime,
+            )
+
+            if not entry.qualified:
+                self.log.debug(
+                    "BUY skipped %s (score=%.1f): %s",
+                    candidate.symbol, candidate.composite, entry.reason,
+                )
+                continue
+
+            order_type = "LIMIT" if entry.use_limit else "MARKET"
+            if entry.use_limit:
+                self._pending_limits[candidate.symbol] = 0
 
             signals.append(TradeSignal(
-                symbol=candidate.symbol,
-                signal=Signal.BUY,
-                quantity=qty,
-                reason=f"score={candidate.composite:.1f} (tech={candidate.technical:.0f} "
-                       f"fund={candidate.fundamental:.0f} mom={candidate.momentum:.0f})",
+                symbol     = candidate.symbol,
+                signal     = Signal.BUY,
+                quantity   = qty,
+                order_type = order_type,
+                price      = entry.entry_price if entry.use_limit else 0.0,
+                reason     = (
+                    f"score={candidate.composite:.1f} "
+                    f"(tech={candidate.technical:.0f} "
+                    f"fund={candidate.fundamental:.0f} "
+                    f"mom={candidate.momentum:.0f}) | {entry.reason}"
+                ),
             ))
 
-        # ---- SELL candidates (held stocks whose score dropped) ----
+        # ---- SELL candidates — statistically-derived, P&L-aware exit logic ----
+        #
+        # Exit levels (stop-loss, take-profit, trailing stop) are computed fresh
+        # each tick from the stock's own ATR and return distribution (VaR).
+        # No hardcoded percentages — a volatile stock gets a wider stop
+        # automatically; a stable stock gets a tighter one.
+        #
+        # Priority order:
+        #   1. Stop-loss  (ATR + VaR blended — tightest wins)
+        #   2. Take-profit (entry + R:R × stop_distance)
+        #   3. Chandelier trailing stop (peak − ATR×mult) — arms after N% gain
+        #   4. Score exit — only fires when already in profit
+        #   5. Emergency exit — score collapsed below threshold (sell even at loss)
+        from strategies.exit_signals import compute_exit_levels
+
         score_map = {s.symbol: s for s in scores}
+        cfg = self.config
+
         for pos in self.positions.all_open():
-            stock_score = score_map.get(pos.symbol)
-            if stock_score is None:
+            ltp = self._fetcher.get_ltp(pos.symbol)
+            if ltp <= 0:
                 continue
-            if stock_score.composite < self.config.score_sell_threshold:
+
+            pos.update_peak(ltp)
+            pnl_pct = pos.pct_change(ltp)
+
+            # Compute statistical exit levels from this stock's OHLCV history
+            df = self._fetcher._cache.load_ohlcv(pos.symbol)
+            exits = compute_exit_levels(
+                df                       = df,
+                avg_buy_price            = pos.avg_buy_price,
+                peak_price               = pos.peak_price,
+                atr_period               = cfg.exit_atr_period,
+                atr_stop_mult            = cfg.exit_atr_stop_mult,
+                atr_chandelier_mult      = cfg.exit_atr_chandelier_mult,
+                risk_reward_ratio        = cfg.exit_risk_reward_ratio,
+                var_period               = cfg.exit_var_period,
+                var_confidence           = cfg.exit_var_confidence,
+                trailing_activation_pct  = cfg.exit_trailing_activation_pct,
+            )
+
+            sell_reason: str | None = None
+
+            # 1. Stop-loss (ATR/VaR blended — computed per stock)
+            if ltp <= exits.stop_loss:
+                sell_reason = (
+                    f"STOP LOSS [{exits.method}]: "
+                    f"ltp=₹{ltp:.2f} ≤ stop=₹{exits.stop_loss:.2f} "
+                    f"({exits.stop_pct:.1f}% below entry, ATR={exits.atr:.2f})"
+                )
+
+            # 2. Take-profit
+            elif exits.take_profit > 0 and ltp >= exits.take_profit:
+                tp_pct = (exits.take_profit - pos.avg_buy_price) / pos.avg_buy_price * 100
+                sell_reason = (
+                    f"TAKE PROFIT: ltp=₹{ltp:.2f} ≥ tp=₹{exits.take_profit:.2f} "
+                    f"(+{tp_pct:.1f}%, R:R={cfg.exit_risk_reward_ratio:.1f})"
+                )
+
+            # 3. Chandelier trailing stop
+            elif exits.trail_armed and ltp <= exits.trail_level:
+                sell_reason = (
+                    f"CHANDELIER STOP: ltp=₹{ltp:.2f} ≤ trail=₹{exits.trail_level:.2f} "
+                    f"(peak=₹{pos.peak_price:.2f}, ATR×{cfg.exit_atr_chandelier_mult}={exits.atr * cfg.exit_atr_chandelier_mult:.2f})"
+                )
+
+            else:
+                stock_score = score_map.get(pos.symbol)
+                if stock_score is not None:
+                    composite = stock_score.composite
+
+                    # 4. Score exit — only when in profit
+                    if composite < cfg.score_sell_threshold and pnl_pct > 0:
+                        sell_reason = (
+                            f"SCORE EXIT (in profit +{pnl_pct:.1f}%): "
+                            f"score={composite:.1f} < {cfg.score_sell_threshold:.0f}"
+                        )
+
+                    # 5. Emergency exit — fundamental breakdown
+                    elif composite < cfg.score_emergency_sell_threshold:
+                        sell_reason = (
+                            f"EMERGENCY EXIT: score={composite:.1f} "
+                            f"< emergency={cfg.score_emergency_sell_threshold:.0f}, "
+                            f"P&L={pnl_pct:+.1f}%"
+                        )
+
+            if sell_reason:
                 signals.append(TradeSignal(
                     symbol=pos.symbol,
                     signal=Signal.SELL,
                     quantity=pos.quantity,
-                    reason=f"score dropped to {stock_score.composite:.1f} "
-                           f"(threshold={self.config.score_sell_threshold})",
+                    reason=sell_reason,
                 ))
 
         self.log.info(
