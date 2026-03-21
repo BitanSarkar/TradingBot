@@ -63,9 +63,16 @@ LIVEMINT = NewsSource(
 
 # ── TIER 2 — Good coverage ──────────────────────────────────────────────────
 
-MONEYCONTROL_NEWS = NewsSource(
-    name="Moneycontrol — News",
-    url_template="https://www.moneycontrol.com/rss/MCtopnews.xml",
+NDTV_PROFIT = NewsSource(
+    name="NDTV Profit — Markets",
+    url_template="https://feeds.feedburner.com/ndtvprofit-latest",
+    tier=TIER_2,
+    is_symbol_specific=False,
+)
+
+FINANCIAL_EXPRESS = NewsSource(
+    name="Financial Express — Markets",
+    url_template="https://www.financialexpress.com/market/feed/",
     tier=TIER_2,
     is_symbol_specific=False,
 )
@@ -79,13 +86,6 @@ MONEYCONTROL_COMPANY = NewsSource(
     ),
     tier=TIER_2,
     is_symbol_specific=True,
-)
-
-BUSINESS_STANDARD = NewsSource(
-    name="Business Standard — Markets",
-    url_template="https://www.business-standard.com/rss/markets-106.rss",
-    tier=TIER_2,
-    is_symbol_specific=False,
 )
 
 # ── TIER 3 — High volume, filtered ──────────────────────────────────────────
@@ -127,8 +127,8 @@ SYMBOL_SOURCES: list[NewsSource] = [
 MARKET_SOURCES: list[NewsSource] = [
     ECONOMIC_TIMES_MARKET,
     LIVEMINT,
-    MONEYCONTROL_NEWS,
-    BUSINESS_STANDARD,
+    NDTV_PROFIT,
+    FINANCIAL_EXPRESS,
 ]
 
 # Tier weights used during sentiment blending
