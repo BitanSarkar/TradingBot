@@ -240,6 +240,10 @@ class PositionTracker:
     def all_open(self) -> list[Position]:
         return [p for p in self._positions.values() if not p.is_flat]
 
+    def all_positions(self) -> list[Position]:
+        """All positions touched this session (open + closed)."""
+        return list(self._positions.values())
+
     def count_open(self) -> int:
         return len(self.all_open())
 

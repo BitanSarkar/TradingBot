@@ -350,17 +350,24 @@ class TradingBot:
         except Exception as exc:
             log.error("on_stop() raised: %s", exc)
 
-        orders  = self.strategy.orders.get_order_history()
-        pnl     = self.strategy.positions.total_realized_pnl()
+        orders   = self.strategy.orders.get_order_history()
+        pnl      = self.strategy.positions.total_realized_pnl()
         open_pos = self.strategy.positions.all_open()
+        all_pos  = self.strategy.positions.all_positions()
 
         log.info("Orders placed  : %d", len(orders))
         log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
 
-        self._send_daily_summary(orders, pnl, open_pos)
+        self._send_daily_summary(orders, pnl, open_pos, all_pos)
 
-    def _send_daily_summary(self, orders: list, pnl: float, open_positions: list) -> None:
+    def _send_daily_summary(
+        self,
+        orders: list,
+        pnl: float,
+        open_positions: list,
+        all_positions: list,
+    ) -> None:
         """Send end-of-day trade summary via AWS SNS email."""
         topic_arn = self.config.sns_topic_arn
         if not topic_arn:
@@ -371,7 +378,6 @@ class TradingBot:
             import boto3
             sns = boto3.client("sns", region_name="ap-south-1")
 
-            # Build summary
             buys  = [o for o in orders if o.get("type") == "BUY"]
             sells = [o for o in orders if o.get("type") == "SELL"]
 
@@ -383,6 +389,23 @@ class TradingBot:
                 f"Open positions : {len(open_positions)}",
                 "",
             ]
+
+            # ── Top Gainers / Losers (by realized P&L) ──
+            traded = [p for p in all_positions if p.realized_pnl != 0]
+            if traded:
+                k       = min(5, len(traded))
+                gainers = sorted(traded, key=lambda p: p.realized_pnl, reverse=True)[:k]
+                losers  = sorted(traded, key=lambda p: p.realized_pnl)[:k]
+
+                lines.append("── Top Gainers ──")
+                for p in gainers:
+                    lines.append(f"  {p.symbol:12s}  P&L ₹{p.realized_pnl:+.2f}")
+                lines.append("")
+
+                lines.append("── Top Losers ──")
+                for p in losers:
+                    lines.append(f"  {p.symbol:12s}  P&L ₹{p.realized_pnl:+.2f}")
+                lines.append("")
 
             if buys:
                 lines.append("── BUYs ──")
