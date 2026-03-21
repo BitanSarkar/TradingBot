@@ -343,33 +343,12 @@ class TradingBot:
 
         return True
 
-    def _market_movers(self, top_n: int = 5) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
-        """Return (gainers, losers) as [(symbol, pct_change), ...] from today's OHLCV cache."""
-        from pathlib import Path
-        import pandas as pd
-
-        ohlcv_dir = Path("cache/ohlcv")
-        if not ohlcv_dir.exists():
+    def _top_scored(self, top_n: int = 5) -> tuple[list, list]:
+        """Return (top_n highest scored, top_n lowest scored) from last scoring pass."""
+        scores = getattr(self.strategy, "last_scores", [])
+        if not scores:
             return [], []
-
-        changes: list[tuple[str, float]] = []
-        for path in ohlcv_dir.glob("*.parquet"):
-            try:
-                df = pd.read_parquet(path, columns=["Close"])
-                if len(df) < 2:
-                    continue
-                prev  = float(df["Close"].iloc[-2])
-                today = float(df["Close"].iloc[-1])
-                if prev > 0:
-                    changes.append((path.stem, (today - prev) / prev * 100))
-            except Exception:
-                continue
-
-        if not changes:
-            return [], []
-
-        changes.sort(key=lambda x: x[1])
-        return list(reversed(changes[-top_n:])), changes[:top_n]
+        return scores[:top_n], scores[-top_n:]
 
     def _shutdown(self) -> None:
         log.info("Running shutdown hook...")
@@ -411,19 +390,6 @@ class TradingBot:
                 "",
             ]
 
-            # ── Market Top Gainers / Losers (today's % change across NSE universe) ──
-            gainers, losers = self._market_movers(top_n=5)
-            if gainers:
-                lines.append("── Market Top Gainers ──")
-                for sym, pct in gainers:
-                    lines.append(f"  {sym:12s}  {pct:+.2f}%")
-                lines.append("")
-            if losers:
-                lines.append("── Market Top Losers ──")
-                for sym, pct in losers:
-                    lines.append(f"  {sym:12s}  {pct:+.2f}%")
-                lines.append("")
-
             if buys:
                 lines.append("── BUYs ──")
                 for o in buys:
@@ -440,6 +406,19 @@ class TradingBot:
                 lines.append("── Open Positions ──")
                 for pos in open_positions:
                     lines.append(f"  {pos.symbol:12s}  qty={pos.quantity}  avg=₹{pos.avg_buy_price:.2f}")
+                lines.append("")
+
+            # ── Top Scored / Bottom Scored from last scoring pass ──
+            top_scored, bottom_scored = self._top_scored(top_n=5)
+            if top_scored:
+                lines.append("── Top Picks (High Score) ──")
+                for s in top_scored:
+                    lines.append(f"  {s.symbol:12s}  score={s.composite:.1f}  tech={s.technical:.1f}  mom={s.momentum:.1f}")
+                lines.append("")
+            if bottom_scored:
+                lines.append("── Bottom Picks (Low Score) ──")
+                for s in bottom_scored:
+                    lines.append(f"  {s.symbol:12s}  score={s.composite:.1f}  tech={s.technical:.1f}  mom={s.momentum:.1f}")
                 lines.append("")
 
             mode = "DRY RUN" if self.config.dry_run else "LIVE"
