@@ -216,12 +216,14 @@ class PositionTracker:
                         symbol, fill_qty, fill_price,
                     )
                 else:
+                    # Capture avg_buy BEFORE record_sell() zeroes it out on flat positions
+                    avg_buy = self._positions.get(symbol, Position(symbol)).avg_buy_price
                     self.record_sell(symbol, fill_qty, fill_price)
                     log.info(
                         "Order FILLED: SELL %s x%d @ Rs%.2f  "
                         "P&L this trade: Rs%.2f",
                         symbol, fill_qty, fill_price,
-                        (fill_price - self._positions.get(symbol, Position(symbol)).avg_buy_price) * fill_qty,
+                        (fill_price - avg_buy) * fill_qty,
                     )
                 filled_symbols.append(symbol)
 

@@ -100,7 +100,7 @@ class ScoreBasedStrategy(BaseStrategy):
     def on_stop(self) -> None:
         self.log.info("Shutdown — squaring off all open positions.")
         for pos in self.positions.all_open():
-            self.orders.sell(pos.symbol, pos.quantity, reason="shutdown square-off")
+            self.orders.sell(pos.symbol, pos.quantity)
 
     # ------------------------------------------------------------------
     # Core tick
