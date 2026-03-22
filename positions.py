@@ -28,7 +28,10 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from paper_ledger import PaperLedger
 
 
 log = logging.getLogger("PositionTracker")
@@ -109,6 +112,11 @@ class PositionTracker:
         self._config    = config
         self._positions: dict[str, Position] = {}
         self._pending:   dict[str, PendingOrder] = {}   # symbol → pending order
+        self._paper: Optional[PaperLedger] = None       # set via attach_paper_ledger()
+
+    def attach_paper_ledger(self, ledger: "PaperLedger") -> None:
+        """Attach the paper trading ledger. Call once after construction in dry-run mode."""
+        self._paper = ledger
 
     # ------------------------------------------------------------------
     # Pending order management
@@ -308,6 +316,8 @@ class PositionTracker:
             "BUY confirmed: %s  qty=%d  new_avg=Rs%.2f",
             symbol, pos.quantity, pos.avg_buy_price,
         )
+        if self._paper is not None:
+            self._paper.on_buy(symbol, quantity, price)
 
     def record_sell(self, symbol: str, quantity: int, price: float) -> None:
         pos = self._positions.get(symbol)
@@ -317,7 +327,8 @@ class PositionTracker:
                 symbol, getattr(pos, "quantity", 0), quantity,
             )
             return
-        pnl              = (price - pos.avg_buy_price) * quantity
+        avg_buy          = pos.avg_buy_price
+        pnl              = (price - avg_buy) * quantity
         pos.realized_pnl += pnl
         pos.quantity     -= quantity
         if pos.is_flat:
@@ -326,6 +337,8 @@ class PositionTracker:
             "SELL confirmed: %s  qty_left=%d  trade_pnl=Rs%.2f  session_pnl=Rs%.2f",
             symbol, pos.quantity, pnl, pos.realized_pnl,
         )
+        if self._paper is not None:
+            self._paper.on_sell(symbol, quantity, price, avg_buy)
 
     # ------------------------------------------------------------------
     # Broker sync — seed/refresh from Groww

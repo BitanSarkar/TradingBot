@@ -30,10 +30,13 @@ from __future__ import annotations
 import signal
 import time
 
+from pathlib import Path
+
 from config import Config
 from logger import get_logger
 from market_hours import market_state, seconds_until_open, market_status_line
 from orders import OrderManager
+from paper_ledger import PaperLedger
 from positions import PositionTracker
 from universe import StockUniverse
 from data import DataFetcher
@@ -357,17 +360,26 @@ class TradingBot:
         except Exception as exc:
             log.error("on_stop() raised: %s", exc)
 
-        orders   = self.strategy.orders.get_order_history()
-        pnl      = self.strategy.positions.total_realized_pnl()
-        open_pos = self.strategy.positions.all_open()
+        orders      = self.strategy.orders.get_order_history()
+        pnl         = self.strategy.positions.total_realized_pnl()
+        open_pos    = self.strategy.positions.all_open()
+        all_pos     = self.strategy.positions.all_positions()
+        paper       = self.strategy.positions._paper   # None in live mode
 
         log.info("Orders placed  : %d", len(orders))
         log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
 
-        self._send_daily_summary(orders, pnl, open_pos)
+        self._send_daily_summary(orders, pnl, open_pos, all_pos, paper)
 
-    def _send_daily_summary(self, orders: list, pnl: float, open_positions: list) -> None:
+    def _send_daily_summary(
+        self,
+        orders:        list,
+        pnl:           float,
+        open_positions: list,
+        all_positions:  list,
+        paper:          "PaperLedger | None",
+    ) -> None:
         """Send end-of-day trade summary via AWS SNS email."""
         topic_arn = self.config.sns_topic_arn
         if not topic_arn:
@@ -381,14 +393,15 @@ class TradingBot:
             buys  = [o for o in orders if o.get("type") == "BUY"]
             sells = [o for o in orders if o.get("type") == "SELL"]
 
-            # Compute unrealized P&L for each open position using last known LTP
             fetcher = getattr(self.strategy, "_fetcher", None)
+
+            # ── Unrealized P&L for open positions ─────────────────────────────
             unrealized_total = 0.0
             open_pos_rows = []
             for pos in open_positions:
                 ltp = fetcher.get_ltp(pos.symbol) if fetcher else 0.0
                 if ltp > 0:
-                    unreal = (ltp - pos.avg_buy_price) * pos.quantity
+                    unreal     = (ltp - pos.avg_buy_price) * pos.quantity
                     unreal_pct = (ltp - pos.avg_buy_price) / pos.avg_buy_price * 100
                     unrealized_total += unreal
                     open_pos_rows.append(
@@ -401,8 +414,16 @@ class TradingBot:
                         f"  {pos.symbol:12s}  qty={pos.quantity}  avg=₹{pos.avg_buy_price:.2f}"
                     )
 
+            # ── Top/bottom gainers (by realized P&L this session) ──────────
+            traded = [p for p in all_positions if p.realized_pnl != 0]
+            gainers = sorted(traded, key=lambda p: p.realized_pnl, reverse=True)[:5]
+            losers  = sorted(traded, key=lambda p: p.realized_pnl)[:5]
+
+            mode = "PAPER TRADING" if self.config.dry_run else "LIVE"
+
             lines = [
                 f"TradingBot Daily Summary — {date.today().isoformat()}",
+                f"Mode: {mode}",
                 "=" * 55,
                 f"Orders today   : {len(orders)}  ({len(buys)} BUY, {len(sells)} SELL)",
                 f"Realized P&L   : ₹{pnl:+.2f}",
@@ -411,28 +432,110 @@ class TradingBot:
                 "",
             ]
 
+            # ── Today's BUYs ───────────────────────────────────────────────
             if buys:
                 lines.append("── BUYs ──")
                 for o in buys:
-                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  "
-                                  f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}")
+                    lines.append(
+                        f"  {o['symbol']:12s}  qty={o['qty']}  "
+                        f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}"
+                    )
                 lines.append("")
 
+            # ── Today's SELLs ──────────────────────────────────────────────
             if sells:
                 lines.append("── SELLs ──")
                 for o in sells:
-                    lines.append(f"  {o['symbol']:12s}  qty={o['qty']}  "
-                                  f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}")
+                    lines.append(
+                        f"  {o['symbol']:12s}  qty={o['qty']}  "
+                        f"price=₹{o.get('price', 0):.2f}  status={o.get('status','?')}"
+                    )
                 lines.append("")
 
+            # ── Open Positions ─────────────────────────────────────────────
             if open_pos_rows:
                 lines.append("── Open Positions ──")
                 lines.extend(open_pos_rows)
                 lines.append("")
 
-            # ── Top Scored / Bottom Scored from last scoring pass ──
-            # These are the COMPOSITE SCORE rankings from the full stock universe,
-            # NOT P&L-based — shows which stocks the model rates highest/lowest today.
+            # ── Session Gainers / Losers ───────────────────────────────────
+            if gainers:
+                lines.append("── Top Gainers (Session) ──")
+                for p in gainers:
+                    lines.append(f"  {p.symbol:12s}  realized=₹{p.realized_pnl:+.2f}")
+                lines.append("")
+            if losers:
+                lines.append("── Top Losers (Session) ──")
+                for p in losers:
+                    lines.append(f"  {p.symbol:12s}  realized=₹{p.realized_pnl:+.2f}")
+                lines.append("")
+
+            # ── Paper trading account snapshot ─────────────────────────────
+            if paper is not None:
+                snap = paper.snapshot(open_positions, fetcher)
+                ret_sign = "+" if snap["return_pct"] >= 0 else ""
+                gain_sign = "+" if snap["total_gain"] >= 0 else ""
+
+                lines += [
+                    "=" * 55,
+                    "PAPER TRADING ACCOUNT",
+                    "=" * 55,
+                    f"  Starting capital : ₹{snap['starting_balance']:>12,.2f}",
+                    f"  Cash available   : ₹{snap['cash']:>12,.2f}",
+                    f"  Open pos. value  : ₹{snap['open_value']:>12,.2f}",
+                    f"  Total portfolio  : ₹{snap['total_value']:>12,.2f}",
+                    f"  Overall return   : {ret_sign}{snap['return_pct']:.2f}%  "
+                    f"({gain_sign}₹{snap['total_gain']:,.2f})",
+                    "",
+                ]
+
+                # Per-position breakdown
+                if snap["open_rows"]:
+                    lines.append("  Holdings:")
+                    for r in snap["open_rows"]:
+                        pct_s = f"{r['pct']:+.1f}%"
+                        unreal_s = f"₹{r['unrealized']:+.0f}"
+                        lines.append(
+                            f"    {r['symbol']:12s}  qty={r['qty']}  "
+                            f"avg=₹{r['avg_buy']:,.2f}  ltp=₹{r['ltp']:,.2f}  "
+                            f"{unreal_s} ({pct_s})"
+                        )
+                    lines.append("")
+
+                # Today's completed trades with individual P&L
+                todays = paper.todays_trades()
+                todays_sells = [t for t in todays if t.action == "SELL"]
+                if todays_sells:
+                    lines.append("  Today's Closed Trades:")
+                    day_pnl = 0.0
+                    for t in todays_sells:
+                        sign = "+" if t.pnl >= 0 else ""
+                        pct  = ((t.price - t.avg_buy_price) / t.avg_buy_price * 100
+                                if t.avg_buy_price else 0)
+                        day_pnl += t.pnl
+                        lines.append(
+                            f"    {t.symbol:12s}  qty={t.quantity}  "
+                            f"buy=₹{t.avg_buy_price:.2f}  sell=₹{t.price:.2f}  "
+                            f"P&L={sign}₹{t.pnl:.2f} ({sign}{pct:.1f}%)"
+                        )
+                    day_sign = "+" if day_pnl >= 0 else ""
+                    lines.append(f"  Today's realized : {day_sign}₹{day_pnl:.2f}")
+                    lines.append("")
+
+                # All-time per-symbol P&L
+                sym_pnl = paper.realized_pnl_by_symbol()
+                if sym_pnl:
+                    lines.append("  All-Time Realized P&L by Symbol:")
+                    for sym, sym_gain in sorted(sym_pnl.items(),
+                                                key=lambda x: x[1], reverse=True):
+                        sign = "+" if sym_gain >= 0 else ""
+                        lines.append(f"    {sym:12s}  {sign}₹{sym_gain:.2f}")
+                    total_realized = paper.total_realized_pnl()
+                    r_sign = "+" if total_realized >= 0 else ""
+                    lines.append(f"  All-time total   : {r_sign}₹{total_realized:.2f}")
+                    lines.append("")
+
+            # ── Top Scored / Bottom Scored from last scoring pass ──────────
             top_scored, bottom_scored = self._top_scored(top_n=5)
             if top_scored:
                 lines.append("── Top Picks (Highest Composite Score) ──")
@@ -455,13 +558,20 @@ class TradingBot:
                     )
                 lines.append("")
 
-            mode = "DRY RUN" if self.config.dry_run else "LIVE"
-            lines.append(f"Mode: {mode}")
-
-            subject = (
-                f"[TradingBot] EOD Summary {date.today().isoformat()} "
-                f"| Realized ₹{pnl:+.2f} | Unrealized ₹{unrealized_total:+.2f}"
-            )
+            # Subject line
+            if paper is not None:
+                snap = paper.snapshot(open_positions, fetcher)
+                ret_sign = "+" if snap["return_pct"] >= 0 else ""
+                subject = (
+                    f"[TradingBot] EOD Summary {date.today().isoformat()} "
+                    f"| Paper ₹{snap['total_value']:,.0f} ({ret_sign}{snap['return_pct']:.1f}%) "
+                    f"| Today ₹{pnl:+.2f}"
+                )
+            else:
+                subject = (
+                    f"[TradingBot] EOD Summary {date.today().isoformat()} "
+                    f"| Realized ₹{pnl:+.2f} | Unrealized ₹{unrealized_total:+.2f}"
+                )
             message = "\n".join(lines)
 
             sns.publish(TopicArn=topic_arn, Subject=subject, Message=message)
@@ -488,6 +598,19 @@ def build_bot() -> TradingBot:
     orders    = OrderManager(groww_client, config)
     positions = PositionTracker(groww_client, config)
     positions.refresh_from_broker()   # seed local state from your real Groww account
+
+    # ── Paper trading ledger (dry-run only) ───────────────────────────────────
+    if config.dry_run:
+        ledger = PaperLedger(
+            starting_balance = config.dry_run_balance,
+            ledger_path      = Path("cache/paper_ledger.json"),
+        )
+        positions.attach_paper_ledger(ledger)
+        log.info(
+            "Paper trading enabled — starting balance ₹%.2f | "
+            "ledger: cache/paper_ledger.json",
+            config.dry_run_balance,
+        )
     cache     = DataCache()
     fetcher   = DataFetcher(cache)
     universe  = StockUniverse()
