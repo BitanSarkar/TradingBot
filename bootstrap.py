@@ -23,9 +23,51 @@ Usage
 """
 
 import argparse
+import logging
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
+
+
+# ── Logging setup ─────────────────────────────────────────────────────────────
+
+def setup_logging() -> logging.Logger:
+    """
+    Set up logging to both console (stdout) and a rotating log file.
+    Every bootstrap run appends to logs/bootstrap.log with timestamps.
+    """
+    Path("logs").mkdir(parents=True, exist_ok=True)
+
+    log_format  = "%(asctime)s  %(levelname)-8s  %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+
+    # Root logger
+    logger = logging.getLogger("bootstrap")
+    logger.setLevel(logging.DEBUG)
+
+    # Console handler — same format so the terminal also shows timestamps
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+
+    # File handler — appends across runs; easy to grep by date
+    file_handler = logging.FileHandler("logs/bootstrap.log", encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+
+    logger.addHandler(console)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def step(log: logging.Logger, msg: str) -> None:
+    log.info("─" * 56)
+    log.info("  %s", msg)
+    log.info("─" * 56)
 
 
 def parse_args():
@@ -37,22 +79,25 @@ def parse_args():
     return p.parse_args()
 
 
-def step(msg: str) -> None:
-    print(f"\n{'─' * 60}")
-    print(f"  {msg}")
-    print(f"{'─' * 60}")
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    log  = setup_logging()
     args = parse_args()
+
+    run_start = time.time()
+    log.info("═" * 56)
+    log.info("  TradingBot Bootstrap started at %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    log.info("  Flags: universe=%s  ohlcv=%s  fundamentals=%s  force=%s",
+             args.universe, args.ohlcv, args.fundamentals, args.force)
+    log.info("═" * 56)
 
     # If no specific flag given, run everything
     run_all = not (args.universe or args.ohlcv or args.fundamentals)
 
     # ── 0. Pre-flight check ────────────────────────────────────────────────
-    step("Pre-flight: checking imports")
+    step(log, "Pre-flight: checking imports")
 
-    # Only require packages actually needed for the requested mode
     required = ["nselib", "pandas", "numpy", "requests"]
     if run_all or args.ohlcv or args.fundamentals:
         required += ["pyarrow"]
@@ -63,49 +108,51 @@ def main():
     for pkg in required:
         try:
             __import__(pkg)
-            print(f"  ✅  {pkg}")
+            log.info("  ✅  %s", pkg)
         except ImportError:
-            print(f"  ❌  {pkg}  ← NOT installed")
+            log.error("  ❌  %s  ← NOT installed", pkg)
             missing.append(pkg)
 
     if missing:
-        print(f"\n  Run:  pip install {' '.join(missing)}")
+        log.error("Missing packages: %s", ", ".join(missing))
+        log.error("Run:  pip install %s", " ".join(missing))
         sys.exit(1)
 
-    # Create cache dirs
     for d in ["cache/ohlcv", "cache/fundamentals", "logs"]:
         Path(d).mkdir(parents=True, exist_ok=True)
-    print("\n  Cache directories ready.")
+    log.info("Cache directories ready.")
 
     # ── 1. Universe ────────────────────────────────────────────────────────
     if run_all or args.universe:
-        step("Step 1 / 3 — Building stock universe & sector map")
-        print("  Source : nselib  →  NSE EQ-series equity list")
-        print("  Output : cache/universe.json\n")
+        step(log, "Step 1 / 3 — Building stock universe & sector map")
+        log.info("Source : nselib  →  NSE EQ-series equity list")
+        log.info("Output : cache/universe.json")
 
         from universe import StockUniverse
         u = StockUniverse()
+        t0 = time.time()
         try:
             u.refresh(force=args.force)
         except RuntimeError as exc:
-            print(f"\n  ❌  {exc}")
+            log.error("Universe refresh failed: %s", exc)
             sys.exit(1)
 
         symbols = u.all_symbols()
         sectors = u.all_sectors()
-        print(f"\n  ✅  {len(symbols)} symbols loaded across {len(sectors)} sectors")
+        elapsed = time.time() - t0
+        log.info("✅  Universe done: %d symbols across %d sectors  (%.0fs)",
+                 len(symbols), len(sectors), elapsed)
         for s in sorted(sectors):
             count = len(u.by_sector(s))
-            print(f"       {s:<20}  {count} stocks")
+            log.info("     %-22s  %d stocks", s, count)
 
     # ── 2. OHLCV ──────────────────────────────────────────────────────────
     if run_all or args.ohlcv:
-        step("Step 2 / 3 — Downloading OHLCV history (1 year)")
-        print("  Source : nselib  →  price_volume_and_deliverable_position_data()")
-        print("  Fallback: nsepy  →  get_history()")
-        print("  Output : cache/ohlcv/<SYMBOL>.parquet\n")
-        print("  ⚠️   This takes ~2–5 minutes on first run (2,117 symbols).")
-        print("       Subsequent runs only fetch the latest candle per symbol.\n")
+        step(log, "Step 2 / 3 — Downloading OHLCV history (1 year)")
+        log.info("Source   : nselib  →  price_volume_and_deliverable_position_data()")
+        log.info("Fallback : nsepy   →  get_history()")
+        log.info("Output   : cache/ohlcv/<SYMBOL>.parquet")
+        log.info("⚠️  First run takes ~2–5 min (2,117 symbols). Subsequent runs are fast.")
 
         from universe import StockUniverse
         from data.cache import DataCache
@@ -118,20 +165,21 @@ def main():
 
         symbols = u.all_symbols()
         t0      = time.time()
+        log.info("Starting OHLCV batch refresh for %d symbols...", len(symbols))
 
         ok, failed = fetcher.batch_refresh(symbols, force=args.force)
 
         elapsed = time.time() - t0
-        print(f"\n  ✅  OHLCV done: {ok} ok / {failed} failed  ({elapsed:.0f}s)")
+        log.info("✅  OHLCV done: %d ok / %d failed  (%.0fs)", ok, failed, elapsed)
+        if failed > 0:
+            log.warning("%d symbols failed to fetch — they will use score=50 (neutral) this session.", failed)
 
     # ── 3. Fundamentals ───────────────────────────────────────────────────
     if run_all or args.fundamentals:
-        step("Step 3 / 3 — Downloading fundamental data")
-        print("  Source : NSE quote API  (P/E, EPS, P/B, 52W, Market Cap)")
-        print("  Output : cache/fundamentals/<SYMBOL>.json")
-        print("  Note   : ~254 / 2117 symbols have full fundamental data on NSE.\n")
-        print("           Missing fundamentals default to score=50 (neutral).")
-        print("           This is expected — small-caps often have no filings.\n")
+        step(log, "Step 3 / 3 — Downloading fundamental data")
+        log.info("Source : NSE quote API  (P/E, EPS, P/B, 52W, Market Cap)")
+        log.info("Output : cache/fundamentals/<SYMBOL>.json")
+        log.info("Note   : ~254 / 2117 symbols have full data — small-caps often have no filings.")
 
         from universe import StockUniverse
         from data.cache import DataCache
@@ -144,22 +192,20 @@ def main():
 
         symbols = u.all_symbols()
         t0      = time.time()
+        log.info("Starting fundamentals refresh for %d symbols...", len(symbols))
 
         updated = fetcher.refresh_fundamentals(symbols, force=args.force)
 
         elapsed = time.time() - t0
-        print(f"\n  ✅  Fundamentals done: {updated}/{len(symbols)} updated  ({elapsed:.0f}s)")
+        log.info("✅  Fundamentals done: %d/%d updated  (%.0fs)", updated, len(symbols), elapsed)
 
     # ── Done ───────────────────────────────────────────────────────────────
-    print(f"\n{'═' * 60}")
-    print("  Bootstrap complete.  You can now run:")
-    print()
-    print("      python bot.py")
-    print()
-    print("  To force a full refresh at any time:")
-    print()
-    print("      python bootstrap.py --force")
-    print(f"{'═' * 60}\n")
+    total = time.time() - run_start
+    log.info("═" * 56)
+    log.info("  Bootstrap complete in %.0fs  (%s)",
+             total, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    log.info("  Run:  python bot.py")
+    log.info("═" * 56)
 
 
 if __name__ == "__main__":
