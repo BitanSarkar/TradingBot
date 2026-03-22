@@ -600,16 +600,36 @@ def build_bot() -> TradingBot:
     positions.refresh_from_broker()   # seed local state from your real Groww account
 
     # ── Paper trading ledger (dry-run only) ───────────────────────────────────
+    # In live mode (dry_run=False): PaperLedger is never created.
+    # record_buy/record_sell check `_paper is not None` before touching it,
+    # so live trades go straight to Groww with zero paper ledger involvement.
     if config.dry_run:
         ledger = PaperLedger(
             starting_balance = config.dry_run_balance,
             ledger_path      = Path("cache/paper_ledger.json"),
         )
         positions.attach_paper_ledger(ledger)
+
+        # Restore open positions from previous sessions so the bot doesn't
+        # re-buy stocks it already "owns" in paper mode after a restart.
+        restored = ledger.open_positions()
+        if restored:
+            from positions import Position
+            for sym, (qty, avg) in restored.items():
+                pos               = positions._positions.setdefault(sym, Position(symbol=sym))
+                pos.quantity      = qty
+                pos.avg_buy_price = avg
+                pos.peak_price    = avg
+            log.info(
+                "Paper trading: restored %d open position(s) from ledger: %s",
+                len(restored),
+                ", ".join(f"{s} x{q}" for s, (q, _) in restored.items()),
+            )
+
         log.info(
-            "Paper trading enabled — starting balance ₹%.2f | "
+            "Paper trading enabled — balance ₹%.2f | cash ₹%.2f | "
             "ledger: cache/paper_ledger.json",
-            config.dry_run_balance,
+            config.dry_run_balance, ledger.cash,
         )
     cache     = DataCache()
     fetcher   = DataFetcher(cache)
