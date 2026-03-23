@@ -16,6 +16,8 @@ env/
 cache/
 # Universe cache is tracked in git so EC2 gets it via git pull (NSE blocks EC2 IPs)
 !cache/universe.json
+!configs/.env.*
+!configs/*.sh
 
 # Rotating bot.log files
 logs/
