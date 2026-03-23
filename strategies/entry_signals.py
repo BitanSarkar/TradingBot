@@ -403,8 +403,15 @@ def compute_entry_quality(
     is_divergence   = False
 
     if universe_scores:
-        bull_ratio  = sum(1 for s in universe_scores if s > 50) / len(universe_scores)
-        avg_score   = float(np.mean(universe_scores))
+        # Exclude composite=0.0 stocks — these are no-data sentinels from the
+        # scoring engine (df is None/empty → composite=0.0).  Including them
+        # would suppress bull_ratio far below the real market state, since a
+        # large universe has many stocks with missing cache on first boot.
+        valid_scores = [s for s in universe_scores if s > 0]
+        if not valid_scores:
+            valid_scores = universe_scores   # fallback: use all if everything is 0
+        bull_ratio  = sum(1 for s in valid_scores if s > 50) / len(valid_scores)
+        avg_score   = float(np.mean(valid_scores))
 
         if bull_ratio < bull_ratio_min:
             # ── Regime is unfavourable — check for divergence bypass ──────────
