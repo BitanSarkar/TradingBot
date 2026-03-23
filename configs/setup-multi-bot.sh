@@ -10,14 +10,15 @@
 #  What it does:
 #    1. Creates runs/<profile>/ directory for each profile
 #    2. Copies .env config into each run directory
-#    3. Symlinks shared bootstrap cache (no duplicate API calls)
+#    3. All 5 bots share the same cache/ (read-only bootstrap data)
+#       Each bot writes its own paper_ledger_<profile>.json inside cache/
 #    4. Creates systemd service: tradingbot-<profile>.service
 #    5. Enables + starts all 5 services
 # =============================================================================
 
 BOT_DIR="/home/ec2-user/TradingBot"
 PYTHON="$BOT_DIR/.venv/bin/python"
-USER="ec2-user"
+BOT_USER="ec2-user"
 
 PROFILES=(max-profit bear-fighter aggressive contrarian balanced)
 
@@ -42,17 +43,12 @@ for profile in "${PROFILES[@]}"; do
     sed -i "s/YOUR_SECRET/$SECRET/" "$RUN_DIR/.env"
     sed -i "s|SNS_TOPIC_ARN=.*|SNS_TOPIC_ARN=$SNS_ARN|" "$RUN_DIR/.env"
 
-    # Create per-instance cache dir (paper_ledger.json + score_history.json stay local)
-    # Symlink only the heavy bootstrap data so nselib is not called 5 times
-    mkdir -p "$RUN_DIR/cache"
-    for shared in ohlcv fundamentals universe.json; do
-        if [ ! -L "$RUN_DIR/cache/$shared" ]; then
-            ln -sf "$BOT_DIR/cache/$shared" "$RUN_DIR/cache/$shared"
-        fi
-    done
+    # Each bot uses the shared cache/ but writes its own ledger file
+    # PAPER_LEDGER_PATH is relative to WorkingDirectory (BOT_DIR)
+    echo "PAPER_LEDGER_PATH=cache/paper_ledger_${profile}.json" >> "$RUN_DIR/.env"
 
-    chown -R $USER:$USER "$RUN_DIR"
-    echo "✓ Created runs/$profile/"
+    chown -R $BOT_USER:$BOT_USER "$RUN_DIR"
+    echo "✓ Created runs/$profile/  (ledger → cache/paper_ledger_${profile}.json)"
 done
 
 # ── Create systemd service for each profile ───────────────────────────────────
@@ -68,8 +64,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=$USER
-WorkingDirectory=$RUN_DIR
+User=$BOT_USER
+WorkingDirectory=$BOT_DIR
 EnvironmentFile=$RUN_DIR/.env
 ExecStart=$PYTHON $BOT_DIR/bot.py
 Restart=on-failure
@@ -95,7 +91,7 @@ for profile in "${PROFILES[@]}"; do
     SERVICE="tradingbot-$profile"
     systemctl enable "$SERVICE"
     systemctl start "$SERVICE"
-    sleep 5  # stagger starts — avoid all 5 hitting API simultaneously
+    sleep 10  # stagger starts — avoid all 5 hitting Groww API simultaneously
     STATUS=$(systemctl is-active "$SERVICE")
     echo "✓ $SERVICE: $STATUS"
 done
@@ -104,11 +100,18 @@ echo ""
 echo "============================================================"
 echo "All 5 bots running. Useful commands:"
 echo ""
-echo "  Check all:       sudo systemctl status 'tradingbot-*'"
-echo "  Watch max-profit: sudo journalctl -u tradingbot-max-profit -f"
-echo "  Stop all:        sudo systemctl stop 'tradingbot-*'"
-echo "  Restart all:     sudo systemctl restart 'tradingbot-*'"
+echo "  Check all:        sudo systemctl status 'tradingbot-*'"
+echo "  Watch a profile:  sudo journalctl -u tradingbot-max-profit -f"
+echo "  Stop all:         sudo systemctl stop 'tradingbot-*'"
+echo "  Restart all:      sudo systemctl restart 'tradingbot-*'"
 echo ""
-echo "  Logs:            runs/<profile>/logs/bot-server.log"
-echo "  Ledger:          runs/<profile>/cache/paper_ledger.json"
+echo "  Logs:    runs/<profile>/logs/bot-server.log"
+echo "  Ledgers: cache/paper_ledger_<profile>.json"
+echo ""
+echo "  Compare P&L:"
+echo "    for p in max-profit bear-fighter aggressive contrarian balanced; do"
+echo "      echo \$p; python3 -c \""
+echo "import json; d=json.load(open('cache/paper_ledger_\$p.json'));"
+echo "print(f'  cash=₹{d[\"cash\"]:,.0f}  return={(d[\"cash\"]/1000000-1)*100:+.2f}%')\""
+echo "    done"
 echo "============================================================"

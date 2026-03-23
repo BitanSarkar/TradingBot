@@ -619,7 +619,7 @@ def build_bot() -> TradingBot:
     if config.dry_run:
         ledger = PaperLedger(
             starting_balance = config.dry_run_balance,
-            ledger_path      = Path("cache/paper_ledger.json"),
+            ledger_path      = Path(config.paper_ledger_path),
         )
         positions.attach_paper_ledger(ledger)
 
