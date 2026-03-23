@@ -598,9 +598,15 @@ def build_bot() -> TradingBot:
     config = Config()
 
     from growwapi import GrowwAPI
-    token = GrowwAPI.get_access_token(api_key=config.api_key, secret=config.secret)
-    groww_client = GrowwAPI(token)
-    log.info("Authenticated with Groww%s.", " (dry-run — no real orders)" if config.dry_run else "")
+    groww_client = None
+    try:
+        token = GrowwAPI.get_access_token(api_key=config.api_key, secret=config.secret)
+        groww_client = GrowwAPI(token)
+        log.info("Authenticated with Groww%s.", " (dry-run — no real orders)" if config.dry_run else "")
+    except Exception as exc:
+        if not config.dry_run:
+            raise   # live mode: auth failure is fatal
+        log.warning("Groww auth failed (%s) — LTP will use cached OHLCV close in dry-run.", exc)
 
     orders    = OrderManager(groww_client, config)
     positions = PositionTracker(groww_client, config)
