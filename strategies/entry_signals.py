@@ -414,49 +414,31 @@ def compute_entry_quality(
         avg_score   = float(np.mean(valid_scores))
 
         if bull_ratio < bull_ratio_min:
-            # ── Regime is unfavourable — check for divergence bypass ──────────
+            # ── Weak / bear market regime ─────────────────────────────────────
             #
-            # A stock qualifies for bypass when it shows RELATIVE STRENGTH:
-            #   • Score ≥ bypass_min_score  → structurally excellent quality
-            #   • Velocity ≥ bypass_min_vel → score still rising vs. market
-            #   • RSI ≤ bypass_max_rsi      → price already beaten down (safe entry)
+            # No hard gate — bull_ratio is a proportional PENALTY, not a blocker.
+            # The composite quality score decides whether a stock is exceptional
+            # enough to buy in a weak market.  O'Neil's CAN SLIM principle: the
+            # best stocks lead recoveries — blocking them all is wrong.
             #
-            # All three together = the stock's fundamentals/technicals are
-            # *diverging upward* from a broadly declining market.  This is
-            # exactly what leads the next bull phase (O'Neil's CAN SLIM, RS rule).
-            bypass_score_ok    = current_score  >= regime_bypass_min_score
-            bypass_velocity_ok = velocity       >= regime_bypass_min_velocity
-            bypass_rsi_ok      = rsi            <= regime_bypass_max_rsi
+            # Regime score scales 0→30 as bull_ratio goes 0→bull_ratio_min.
+            # This penalises marginal setups heavily while allowing stocks with
+            # strong velocity + good price entry to still pass the quality gate.
+            #
+            # Divergence bypass (RSI≤45): signals the price itself is beaten down
+            # while the score is rising — use enhanced LIMIT pullback for safety.
+            regime_score = (bull_ratio / bull_ratio_min) * 30.0   # 0–30
+
+            bypass_score_ok    = current_score >= regime_bypass_min_score
+            bypass_velocity_ok = velocity      >= regime_bypass_min_velocity
+            bypass_rsi_ok      = rsi           <= regime_bypass_max_rsi
 
             if bypass_score_ok and bypass_velocity_ok and bypass_rsi_ok:
-                # Divergence bypass triggered
                 is_divergence = True
-                # Cap regime score — we acknowledge the market risk, don't pretend
-                # the environment is good.  30/100 keeps the overall quality honest.
-                regime_score = 30.0
                 log.info(
                     "⚡ DIVERGENCE BYPASS: score=%.1f vel=%.2f RSI=%.0f "
-                    "bull_ratio=%.0f%% — relative strength detected in weak market",
+                    "bull_ratio=%.0f%% — relative strength in weak market",
                     current_score, velocity, rsi, bull_ratio * 100,
-                )
-            else:
-                # No bypass — standard regime rejection
-                missing = []
-                if not bypass_score_ok:
-                    missing.append(f"score={current_score:.1f}<{regime_bypass_min_score}")
-                if not bypass_velocity_ok:
-                    missing.append(f"vel={velocity:.2f}<{regime_bypass_min_velocity}")
-                if not bypass_rsi_ok:
-                    missing.append(f"RSI={rsi:.0f}>{regime_bypass_max_rsi}")
-                return EntryQuality(
-                    qualified=False, entry_price=current_ltp, use_limit=False,
-                    quality_score=0.0, score_velocity=velocity, score_accel=accel,
-                    velocity_score=velocity_score, price_score=price_score,
-                    volume_score=volume_score, atr=atr,
-                    reason=(
-                        f"unfavourable market regime (bull_ratio={bull_ratio:.0%}) "
-                        f"— no divergence bypass: {', '.join(missing)}"
-                    ),
                 )
         else:
             # Normal bull/neutral market — scale regime score 0–100
