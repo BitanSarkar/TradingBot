@@ -51,11 +51,11 @@ for profile in "${PROFILES[@]}"; do
     echo "# ── Profile: $profile overrides ──" >> "$RUN_DIR/.env"
     grep -v "^#" "$BOT_DIR/configs/.env.$profile" | grep -v "^$" >> "$RUN_DIR/.env"
 
-    # Each bot writes its own ledger file (everything else shares cache/)
-    echo "PAPER_LEDGER_PATH=cache/paper_ledger_${profile}.json" >> "$RUN_DIR/.env"
+    # Each bot writes its own ledger in ledgers/ (separate from cache/ — not rsynced)
+    echo "PAPER_LEDGER_PATH=ledgers/paper_ledger_${profile}.json" >> "$RUN_DIR/.env"
 
     chown -R $BOT_USER:$BOT_USER "$RUN_DIR"
-    echo "✓ Created runs/$profile/  (ledger → cache/paper_ledger_${profile}.json)"
+    echo "✓ Created runs/$profile/  (ledger → ledgers/paper_ledger_${profile}.json)"
 done
 
 # ── Create systemd service for each profile ───────────────────────────────────
@@ -113,12 +113,16 @@ echo "  Stop all:         sudo systemctl stop 'tradingbot-*'"
 echo "  Restart all:      sudo systemctl restart 'tradingbot-*'"
 echo ""
 echo "  Logs:    runs/<profile>/logs/bot-server.log"
-echo "  Ledgers: cache/paper_ledger_<profile>.json"
+echo "  Ledgers: ledgers/paper_ledger_<profile>.json"
 echo ""
 echo "  Compare P&L:"
 echo "    for p in max-profit bear-fighter aggressive contrarian balanced; do"
-echo "      echo \$p; python3 -c \""
-echo "import json; d=json.load(open('cache/paper_ledger_\$p.json'));"
-echo "print(f'  cash=₹{d[\"cash\"]:,.0f}  return={(d[\"cash\"]/1000000-1)*100:+.2f}%')\""
+echo "      echo -n \"\$p: \""
+echo "      python3 -c \""
+echo "import json,os; f='ledgers/paper_ledger_\$p.json'"
+echo "d=json.load(open(f)) if os.path.exists(f) else {}"
+echo "cash=d.get('cash',0); start=d.get('starting_balance',1000000)"
+echo "trades=len([t for t in d.get('trades',[]) if t.get('action')=='SELL'])"
+echo "print(f'cash=\u20b9{cash:,.0f}  return={(cash/start-1)*100:+.2f}%  closed_trades={trades}')\""
 echo "    done"
 echo "============================================================"

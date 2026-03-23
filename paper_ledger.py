@@ -49,7 +49,8 @@ class PaperLedger:
     """
 
     def __init__(self, starting_balance: float, ledger_path: Path) -> None:
-        self._path             = ledger_path
+        self._path             = Path(ledger_path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)   # create ledgers/ if missing
         self._starting_balance = starting_balance
         self._cash             = starting_balance
         self._trades: list[TradeRecord] = []

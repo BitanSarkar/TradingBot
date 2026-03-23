@@ -169,7 +169,7 @@ class Config:
     dynamic_sizing:    bool  = field(default_factory=lambda: _bool ("RISK_DYNAMIC_SIZING",    True))
     deploy_fraction:   float = field(default_factory=lambda: _float("RISK_DEPLOY_FRACTION",   0.90))
     dry_run_balance:   float = field(default_factory=lambda: _float("RISK_DRY_RUN_BALANCE", 100000.0))
-    paper_ledger_path: str   = field(default_factory=lambda: _str  ("PAPER_LEDGER_PATH",   "cache/paper_ledger.json"))
+    paper_ledger_path: str   = field(default_factory=lambda: _str  ("PAPER_LEDGER_PATH",   "ledgers/paper_ledger.json"))
 
     # ── Signal Thresholds ─────────────────────────────────────────────────────
     score_buy_threshold:  float = field(default_factory=lambda: _float("SCORE_BUY_THRESHOLD",  70.0))
