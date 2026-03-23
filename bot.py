@@ -642,6 +642,7 @@ def build_bot() -> TradingBot:
         )
     cache     = DataCache()
     fetcher   = DataFetcher(cache)
+    orders.attach_fetcher(fetcher)   # dry-run: use cached close as LTP for sizing
     universe  = StockUniverse()
     universe.refresh()
 

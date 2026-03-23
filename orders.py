@@ -6,6 +6,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from config import Config
+    from data.fetcher import DataFetcher
 
 
 class OrderManager:
@@ -17,10 +18,15 @@ class OrderManager:
     """
 
     def __init__(self, groww_client, config: "Config") -> None:
-        self._client = groww_client
-        self._config = config
+        self._client  = groww_client
+        self._config  = config
+        self._fetcher: Optional["DataFetcher"] = None   # set by attach_fetcher()
         self.log = logging.getLogger("OrderManager")
         self._order_history: list[dict] = []  # local record of every order this session
+
+    def attach_fetcher(self, fetcher: "DataFetcher") -> None:
+        """Wire in the DataFetcher so dry-run mode can use cached close as LTP."""
+        self._fetcher = fetcher
 
     # ------------------------------------------------------------------
     # Public API
@@ -105,7 +111,11 @@ class OrderManager:
     def _fetch_ltp(self, symbol: str) -> Optional[float]:
         """Fetch last traded price for a single NSE equity symbol."""
         if self._config.dry_run:
-            return None   # dry-run: no live price, caller falls back to static qty
+            # No broker API in dry-run — use cached OHLCV last close as proxy
+            if self._fetcher is not None:
+                ltp = self._fetcher.get_ltp(symbol)
+                return ltp if ltp > 0 else None
+            return None
         try:
             key = f"NSE_{symbol}"
             result = self._client.get_ltp(
