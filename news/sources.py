@@ -15,7 +15,8 @@ Feedburner, LiveMint) block requests from AWS IP ranges with HTTP 403.
 All sources below are routed through Google News RSS or use feeds that are
 known to respond correctly from cloud servers.  Direct-source URLs are only
 used where the publisher explicitly allows programmatic access (BSE XML,
-Reuters, Economic Times CMS feeds).
+Economic Times CMS feeds).  Reuters direct RSS (feeds.reuters.com) fails
+DNS resolution from AWS IPs and is routed through Google News.
 """
 
 from __future__ import annotations
@@ -66,8 +67,12 @@ ECONOMIC_TIMES_COMPANY = NewsSource(
 
 REUTERS_INDIA = NewsSource(
     name="Reuters — India Business",
-    # Reuters RSS is open to all IPs; highly reliable from EC2
-    url_template="https://feeds.reuters.com/reuters/INbusinessNews",
+    # feeds.reuters.com DNS fails from AWS IPs — route through Google News instead
+    url_template=(
+        "https://news.google.com/rss/search"
+        "?q=India+business+economy+markets+site:reuters.com"
+        "&hl=en-IN&gl=IN&ceid=IN:en"
+    ),
     tier=TIER_1,
     is_symbol_specific=False,
 )
