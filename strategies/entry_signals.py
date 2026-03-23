@@ -221,7 +221,7 @@ def compute_entry_quality(
     current_ltp:            float,
     *,
     # Velocity / acceleration
-    min_score_velocity:     float = -0.5,        # reject only if score clearly declining
+    min_score_velocity:     float = -999.0,      # kept for API compat; no longer a hard gate
     velocity_window:        int   = 5,           # ticks for velocity regression
     # Price entry quality
     rsi_ideal_max:          float = 55.0,        # RSI below this = good entry
@@ -301,19 +301,16 @@ def compute_entry_quality(
             coeffs_quad = np.polyfit(x, vals, 2)
             accel       = float(coeffs_quad[0]) * 2.0   # d²score/dt²
 
-    # Score: positive velocity up to ~+5 pts/tick = full score
-    #        negative velocity = poor or zero
-    if velocity < min_score_velocity:
-        # Score is falling through the threshold → reject outright
-        return EntryQuality(
-            qualified=False, entry_price=current_ltp, use_limit=False,
-            quality_score=0.0, score_velocity=velocity, score_accel=accel,
-            reason=f"score declining (velocity={velocity:+.2f} pts/tick)",
-        )
-
-    # Map velocity to 0–100: 0 pts/tick → 50, +5 pts/tick → 100, < 0 → 0
-    velocity_raw   = max(0.0, min(velocity, 5.0))
-    velocity_score = 50.0 + velocity_raw * 10.0   # 0 → 50, 5 → 100
+    # Map velocity to 0–100:
+    #   velocity ≥ +5 pts/tick → 100  (strong upward momentum)
+    #   velocity =  0          →  50  (flat — neutral)
+    #   velocity ≤ -5 pts/tick →   0  (strong decline — heavy penalty)
+    # No hard gate — velocity feeds into the composite quality score naturally.
+    # A declining stock is penalised (velocity_score < 50) but not outright blocked;
+    # only stocks with a genuinely strong composite (price + volume + regime) will
+    # still clear the min_quality_score gate.
+    velocity_raw   = max(-5.0, min(velocity, 5.0))
+    velocity_score = 50.0 + velocity_raw * 10.0   # -5→0, 0→50, +5→100
 
     # Acceleration bonus: rising velocity gets a nudge; decelerating gets penalised
     if accel > 0:
