@@ -22,29 +22,36 @@ BOT_USER="ec2-user"
 
 PROFILES=(max-profit bear-fighter aggressive contrarian balanced)
 
-# ── Prompt for credentials once ──────────────────────────────────────────────
+# ── Read credentials from the existing .env (no manual entry needed) ──────────
+BASE_ENV="$BOT_DIR/.env"
+if [ ! -f "$BASE_ENV" ]; then
+    echo "ERROR: $BASE_ENV not found. Run this script from the TradingBot directory."
+    exit 1
+fi
+
+# Extract credentials from existing .env
+GROWW_API_KEY=$(grep -E "^GROWW_API_KEY=" "$BASE_ENV" | cut -d= -f2-)
+GROWW_SECRET=$(grep  -E "^GROWW_SECRET="  "$BASE_ENV" | cut -d= -f2-)
+SNS_TOPIC_ARN=$(grep -E "^SNS_TOPIC_ARN=" "$BASE_ENV" | cut -d= -f2-)
+
+echo "✓ Credentials loaded from $BASE_ENV"
+echo "  API key: ${GROWW_API_KEY:0:6}***"
+echo "  SNS ARN: $SNS_TOPIC_ARN"
 echo ""
-echo "Enter your Groww API credentials (used for all 5 bots):"
-read -p "GROWW_API_KEY: " API_KEY
-read -sp "GROWW_SECRET: " SECRET
-echo ""
-SNS_ARN="arn:aws:sns:ap-south-1:729756086652:NotifySelft"
 
 # ── Create run directories ────────────────────────────────────────────────────
 for profile in "${PROFILES[@]}"; do
     RUN_DIR="$BOT_DIR/runs/$profile"
     mkdir -p "$RUN_DIR/logs"
 
-    # Copy profile .env
-    cp "$BOT_DIR/configs/.env.$profile" "$RUN_DIR/.env"
+    # Start with base .env (gets all credentials + defaults)
+    # Then append profile-specific overrides on top
+    cp "$BASE_ENV" "$RUN_DIR/.env"
+    echo "" >> "$RUN_DIR/.env"
+    echo "# ── Profile: $profile overrides ──" >> "$RUN_DIR/.env"
+    grep -v "^#" "$BOT_DIR/configs/.env.$profile" | grep -v "^$" >> "$RUN_DIR/.env"
 
-    # Inject real credentials
-    sed -i "s/YOUR_API_KEY/$API_KEY/" "$RUN_DIR/.env"
-    sed -i "s/YOUR_SECRET/$SECRET/" "$RUN_DIR/.env"
-    sed -i "s|SNS_TOPIC_ARN=.*|SNS_TOPIC_ARN=$SNS_ARN|" "$RUN_DIR/.env"
-
-    # Each bot uses the shared cache/ but writes its own ledger file
-    # PAPER_LEDGER_PATH is relative to WorkingDirectory (BOT_DIR)
+    # Each bot writes its own ledger file (everything else shares cache/)
     echo "PAPER_LEDGER_PATH=cache/paper_ledger_${profile}.json" >> "$RUN_DIR/.env"
 
     chown -R $BOT_USER:$BOT_USER "$RUN_DIR"
