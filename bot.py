@@ -597,12 +597,10 @@ class TradingBot:
 def build_bot() -> TradingBot:
     config = Config()
 
-    groww_client = None
-    if not config.dry_run:
-        from growwapi import GrowwAPI
-        token = GrowwAPI.get_access_token(api_key=config.api_key, secret=config.secret)
-        groww_client = GrowwAPI(token)
-        log.info("Authenticated with Groww.")
+    from growwapi import GrowwAPI
+    token = GrowwAPI.get_access_token(api_key=config.api_key, secret=config.secret)
+    groww_client = GrowwAPI(token)
+    log.info("Authenticated with Groww%s.", " (dry-run — no real orders)" if config.dry_run else "")
 
     orders    = OrderManager(groww_client, config)
     positions = PositionTracker(groww_client, config)
