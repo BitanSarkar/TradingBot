@@ -109,9 +109,12 @@ References:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -160,25 +163,72 @@ class EntryQuality:
 
 class ScoreHistory:
     """
-    Maintains a rolling window of composite scores per symbol.
-    Call update() every tick after scoring.
+    Maintains a rolling window of ONE composite score per calendar day per symbol.
+
+    Scores from daily OHLCV data don't change between intraday ticks, so
+    recording every tick would give velocity=0 always.  By keeping only one
+    entry per day (the first score seen that day), velocity reflects genuine
+    day-over-day momentum — the only timeframe where it's meaningful.
+
+    History is persisted to disk (cache/score_history.json) so velocity
+    accumulates across bot restarts and weekends.
     """
+
+    _PERSIST_PATH = Path("cache/score_history.json")
+
     def __init__(self, window: int = 10):
-        self._window = window
+        self._window  = window
         self._history: dict[str, deque[float]] = {}
+        self._last_date: dict[str, date] = {}   # last day a score was recorded
+        self._load()
 
     def update(self, symbol: str, score: float) -> None:
+        today = date.today()
+        if self._last_date.get(symbol) == today:
+            return   # already recorded today — skip to avoid duplicates
         if symbol not in self._history:
             self._history[symbol] = deque(maxlen=self._window)
         self._history[symbol].append(score)
+        self._last_date[symbol] = today
 
     def get(self, symbol: str) -> list[float]:
         return list(self._history.get(symbol, []))
 
     def update_batch(self, scores: list) -> None:
-        """Pass the full scores list from the scoring engine each tick."""
+        """Record one score per symbol per day from the scoring engine output."""
         for s in scores:
             self.update(s.symbol, s.composite)
+
+    def save(self) -> None:
+        """Persist history to disk so velocity survives restarts."""
+        try:
+            self._PERSIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                sym: {
+                    "scores":    list(dq),
+                    "last_date": self._last_date.get(sym, "").isoformat()
+                               if self._last_date.get(sym) else "",
+                }
+                for sym, dq in self._history.items()
+            }
+            self._PERSIST_PATH.write_text(json.dumps(data))
+        except Exception as exc:
+            log.debug("ScoreHistory save failed: %s", exc)
+
+    def _load(self) -> None:
+        try:
+            raw = json.loads(self._PERSIST_PATH.read_text())
+            for sym, entry in raw.items():
+                scores = entry.get("scores", [])
+                self._history[sym] = deque(scores[-self._window:], maxlen=self._window)
+                ld = entry.get("last_date", "")
+                if ld:
+                    self._last_date[sym] = date.fromisoformat(ld)
+            log.info("ScoreHistory loaded: %d symbols from %s", len(raw), self._PERSIST_PATH)
+        except FileNotFoundError:
+            pass   # first run — no history yet
+        except Exception as exc:
+            log.warning("ScoreHistory load failed: %s", exc)
 
 
 # ── Core computation ──────────────────────────────────────────────────────────

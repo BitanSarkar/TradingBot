@@ -101,6 +101,8 @@ class ScoreBasedStrategy(BaseStrategy):
         self.log.info("Shutdown — squaring off all open positions.")
         for pos in self.positions.all_open():
             self.orders.sell(pos.symbol, pos.quantity)
+        self._score_history.save()
+        self.log.info("Score history saved.")
 
     # ------------------------------------------------------------------
     # Core tick
@@ -116,8 +118,13 @@ class ScoreBasedStrategy(BaseStrategy):
         scores = self._engine.run(symbols)
         self.last_scores = scores
 
-        # Update rolling score history for velocity/acceleration analysis
+        # Update rolling score history for velocity/acceleration analysis.
+        # One entry per calendar day — scores from daily OHLCV don't change
+        # intraday, so only day-over-day comparison produces meaningful velocity.
         self._score_history.update_batch(scores)
+        if force_refresh:
+            # EOD tick uses today's final close — best time to snapshot the day's score
+            self._score_history.save()
 
         # Log top 5 / bottom 5
         self._log_scores(scores)
