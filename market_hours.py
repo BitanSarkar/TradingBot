@@ -39,6 +39,8 @@ def _now_ist() -> datetime:
 def market_state() -> str:
     """
     Returns one of:
+      "pre_open"   — pre-open session 09:00–09:15, Mon–Fri
+                     bot runs warmup ticks so scores are ready at open
       "open"       — regular session 09:15–15:30, Mon–Fri
       "eod_window" — NSE publishing EOD data 15:30–15:55, Mon–Fri
       "closed"     — everything else (nights, weekends)
@@ -47,6 +49,8 @@ def market_state() -> str:
     if now.weekday() >= 5:           # Saturday=5, Sunday=6
         return "closed"
     t = now.time()
+    if _PRE_OPEN <= t < _OPEN_TIME:
+        return "pre_open"
     if _OPEN_TIME <= t < _CLOSE_TIME:
         return "open"
     if _CLOSE_TIME <= t < _EOD_END:
@@ -123,6 +127,11 @@ def market_status_line() -> str:
     """Human-readable one-liner for logging."""
     state = market_state()
     now   = _now_ist()
+    if state == "pre_open":
+        secs_to_open = (_now_ist().replace(
+            hour=_OPEN_TIME.hour, minute=_OPEN_TIME.minute,
+            second=0, microsecond=0) - now).total_seconds()
+        return f"PRE-OPEN  (regular session opens in {max(0, int(secs_to_open))}s)"
     if state == "open":
         remaining = (_now_ist().replace(
             hour=_CLOSE_TIME.hour, minute=_CLOSE_TIME.minute,

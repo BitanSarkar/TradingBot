@@ -190,7 +190,16 @@ class TradingBot:
             while self._running:
                 state = market_state()
 
-                if state == "closed":
+                if state == "pre_open":
+                    # ── 09:00–09:15: pre-open warmup ──────────────────────
+                    # Run a full scoring tick so signals are ready the moment
+                    # the regular session opens at 09:15. Sleep 60s between
+                    # warmup ticks — there are only ~15 minutes here.
+                    log.info("PRE-OPEN warmup tick — scoring universe before 09:15.")
+                    self._tick(force_refresh=False)
+                    self._sleep(60)
+
+                elif state == "closed":
                     # ── Night / weekend ───────────────────────────────────
                     # One tick per hour so news sentiment can update,
                     # then sleep until the next pre-open.
@@ -241,7 +250,7 @@ class TradingBot:
         import time as _time
         self._tick_count += 1
         state = market_state()
-        label = {"open": "OPEN", "eod_window": "EOD", "closed": "CLOSED"}.get(state, state)
+        label = {"pre_open": "PRE-OPEN", "open": "OPEN", "eod_window": "EOD", "closed": "CLOSED"}.get(state, state)
         log.info("─" * 36 + f"  tick [{label}] #{self._tick_count}  " + "─" * 36)
 
         # Re-sync holdings from Groww every N ticks so manual trades
