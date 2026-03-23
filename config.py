@@ -111,9 +111,10 @@ class Config:
     entry_min_quality:          float = field(default_factory=lambda: _float("ENTRY_MIN_QUALITY",           55.0))
 
     # Reject if the composite score's velocity (rate of change) is below this.
-    # 0.0 = reject only if score is actively falling.
-    # 0.5 = require the score to be rising at ≥ 0.5 pts/tick.
-    entry_min_score_velocity:   float = field(default_factory=lambda: _float("ENTRY_MIN_SCORE_VELOCITY",    0.0))
+    # -0.5 = allow slight drift; only reject clearly declining scores (< -0.5 pts/tick).
+    #  0.0 = reject any negative velocity (too strict — floating-point noise causes false rejects).
+    #  0.5 = require the score to be actively rising.
+    entry_min_score_velocity:   float = field(default_factory=lambda: _float("ENTRY_MIN_SCORE_VELOCITY",   -0.5))
 
     # Score history window (ticks) used for velocity/acceleration regression.
     entry_velocity_window:      int   = field(default_factory=lambda: _int  ("ENTRY_VELOCITY_WINDOW",       5))

@@ -221,7 +221,7 @@ def compute_entry_quality(
     current_ltp:            float,
     *,
     # Velocity / acceleration
-    min_score_velocity:     float = 0.0,         # reject if score falling
+    min_score_velocity:     float = -0.5,        # reject only if score clearly declining
     velocity_window:        int   = 5,           # ticks for velocity regression
     # Price entry quality
     rsi_ideal_max:          float = 55.0,        # RSI below this = good entry
