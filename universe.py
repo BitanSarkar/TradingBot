@@ -28,9 +28,13 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+import urllib.parse
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
+
+import requests as _requests
 
 log = logging.getLogger("Universe")
 
@@ -192,17 +196,78 @@ class StockUniverse:
     # ------------------------------------------------------------------
 
     def _fetch_sector_mappings(self) -> None:
+        """
+        Tag each stock with its sector using a two-pass priority scheme:
+
+        Pass 1 — Specific sector indices (IT, BANKING, PHARMA, …)
+                  Only tags a symbol if it is currently DEFAULT.
+                  First-write-wins so overlapping index membership doesn't
+                  cause a later specific sector to clobber an earlier one.
+
+        Pass 2 — Cap-based indices (MIDCAP, SMALLCAP)
+                  Only tags symbols that are still DEFAULT after Pass 1.
+                  This stops MIDCAP/SMALLCAP from wiping out sector tags.
+
+        A single warmed-up NSE session is shared across all requests to avoid
+        NSE rate-limiting (which triggers when a new session is created per call).
+        """
+        # Split indices into specific-sector vs cap-based
+        _CAP_SECTORS = {"MIDCAP", "SMALLCAP"}
+        specific = {s: n for s, n in _SECTOR_INDICES.items() if s not in _CAP_SECTORS}
+        cap      = {s: n for s, n in _SECTOR_INDICES.items() if s in _CAP_SECTORS}
+
+        nse_session = self._warm_nse_session()
         tagged = 0
-        for sector, index_name in _SECTOR_INDICES.items():
-            constituents = self._get_index_constituents(index_name)
+
+        # ── Pass 1: specific sectors ──────────────────────────────────────
+        for sector, index_name in specific.items():
+            constituents = self._get_index_constituents(index_name, nse_session)
+            n = 0
             for sym in constituents:
-                if sym in self._stocks:
+                if sym in self._stocks and self._stocks[sym]["sector"] == "DEFAULT":
                     self._stocks[sym]["sector"] = sector
                     tagged += 1
-            log.info("  %-14s → %d stocks  (%s)", sector, len(constituents), index_name)
+                    n += 1
+            log.info("  [pass1] %-14s → %d new tags  (%s)", sector, n, index_name)
+            time.sleep(0.4)
+
+        # ── Pass 2: cap-based (only for stocks still DEFAULT) ─────────────
+        for sector, index_name in cap.items():
+            constituents = self._get_index_constituents(index_name, nse_session)
+            n = 0
+            for sym in constituents:
+                if sym in self._stocks and self._stocks[sym]["sector"] == "DEFAULT":
+                    self._stocks[sym]["sector"] = sector
+                    tagged += 1
+                    n += 1
+            log.info("  [pass2] %-14s → %d new tags  (%s)", sector, n, index_name)
+            time.sleep(0.4)
+
         log.info("Total sector-tagged: %d symbols.", tagged)
 
-    def _get_index_constituents(self, index_name: str) -> list[str]:
+    def _warm_nse_session(self) -> "_requests.Session":
+        """Open a single requests.Session and warm up the NSE cookie."""
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer":         "https://www.nseindia.com/",
+        }
+        session = _requests.Session()
+        session.headers.update(headers)
+        try:
+            session.get("https://www.nseindia.com", timeout=10)
+            log.debug("NSE session warmed up (cookies: %s).", list(session.cookies.keys()))
+        except Exception as exc:
+            log.warning("NSE session warm-up failed: %s", exc)
+        return session
+
+    def _get_index_constituents(
+        self, index_name: str, nse_session: "_requests.Session | None" = None
+    ) -> list[str]:
         """Try nselib first, then NSE public API, then return []."""
 
         # Method 1: nselib
@@ -213,9 +278,9 @@ class StockUniverse:
         except Exception as exc:
             log.debug("nselib index fetch failed (%s): %s", index_name, exc)
 
-        # Method 2: NSE public JSON API
+        # Method 2: NSE public JSON API (reuse caller's session if provided)
         try:
-            result = self._via_nse_api(index_name)
+            result = self._via_nse_api(index_name, session=nse_session)
             if result:
                 return result
         except Exception as exc:
@@ -224,37 +289,62 @@ class StockUniverse:
         return []
 
     def _via_nselib(self, index_name: str) -> list[str]:
+        """
+        nselib has no direct 'get index constituents' function.
+        capital_market.index_data() returns PRICE HISTORY of the index,
+        not the constituent stocks — so it never has a SYMBOL column.
+
+        Instead use nselib's dedicated constituent lists for known indices:
+          nifty50_equity_list(), niftynext50_equity_list(),
+          niftymidcap150_equity_list(), niftysmallcap250_equity_list()
+
+        For sector indices (IT, FMCG, AUTO, …) nselib has no equivalent,
+        so this returns [] and _via_nse_api() is the real workhorse.
+        """
         from nselib import capital_market
-        today  = date.today()
-        from_d = (today - timedelta(days=7)).strftime("%d-%m-%Y")
-        to_d   = today.strftime("%d-%m-%Y")
-
-        df = capital_market.index_data(index_name, from_date=from_d, to_date=to_d)
-        if df is None or df.empty:
-            return []
-
-        for col in ("symbol", "Symbol", "SYMBOL"):
-            if col in df.columns:
-                return df[col].dropna().str.strip().str.upper().unique().tolist()
+        _NSELIB_LISTS = {
+            "NIFTY 50":              capital_market.nifty50_equity_list,
+            "NIFTY NEXT 50":         capital_market.niftynext50_equity_list,
+            "NIFTY MIDCAP 150":      capital_market.niftymidcap150_equity_list,
+            "NIFTY SMALLCAP 250":    capital_market.niftysmallcap250_equity_list,
+            # aliases
+            "NIFTY MIDCAP 100":      capital_market.niftymidcap150_equity_list,
+            "NIFTY SMALLCAP 100":    capital_market.niftysmallcap250_equity_list,
+        }
+        fn = _NSELIB_LISTS.get(index_name)
+        if fn is None:
+            return []   # sector indices → fall through to _via_nse_api
+        try:
+            df = fn()
+            if df is None or df.empty:
+                return []
+            for col in ("SYMBOL", "Symbol", "symbol", "TckrSymb"):
+                if col in df.columns:
+                    return df[col].dropna().str.strip().str.upper().unique().tolist()
+        except Exception as exc:
+            log.debug("nselib list fetch failed (%s): %s", index_name, exc)
         return []
 
-    def _via_nse_api(self, index_name: str) -> list[str]:
-        import urllib.parse
-        import requests
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer":         "https://www.nseindia.com/",
-        }
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers, timeout=10)
+    def _via_nse_api(
+        self,
+        index_name: str,
+        session: "_requests.Session | None" = None,
+    ) -> list[str]:
+        """
+        Fetch index constituents from NSE's public JSON API.
+
+        If `session` is provided (pre-warmed by _fetch_sector_mappings) it is
+        reused so that NSE's rate-limiter sees one continuous browser session
+        rather than a brand-new connection for every index.
+        """
+        own_session = session is None
+        if own_session:
+            # Called stand-alone (e.g. tests) — warm up a fresh session
+            session = self._warm_nse_session()
+
         encoded = urllib.parse.quote(index_name)
-        url  = f"https://www.nseindia.com/api/equity-stockIndices?index={encoded}"
-        resp = session.get(url, headers=headers, timeout=15)
+        url = f"https://www.nseindia.com/api/equity-stockIndices?index={encoded}"
+        resp = session.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         return [
