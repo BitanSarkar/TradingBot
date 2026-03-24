@@ -606,7 +606,18 @@ def build_bot() -> TradingBot:
     except Exception as exc:
         if not config.dry_run:
             raise   # live mode: auth failure is fatal
-        log.warning("Groww auth failed (%s) — LTP will use cached OHLCV close in dry-run.", exc)
+        # dry-run: auth failure means NO live LTP — OHLCV cache will be used instead.
+        # This is a significant degradation — log it as ERROR so it is never missed.
+        log.error(
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "  Groww auth FAILED — LTP will use yesterday's OHLCV close.\n"
+            "  Paper P&L will be based on stale prices, not live market.\n"
+            "  Fix: check GROWW_API_KEY / GROWW_SECRET in your .env\n"
+            "  and ensure your Groww API key has Market Data permissions.\n"
+            "  Error: %s\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            exc,
+        )
 
     orders    = OrderManager(groww_client, config)
     positions = PositionTracker(groww_client, config)
