@@ -88,23 +88,78 @@ PROTECTED_KEYS = {
     "LOG_LEVEL", "TZ",
 }
 
-# Large-cap proxy symbols with sector labels for breadth-spread computation
+# Full Nifty-50 proxy universe with sector labels for breadth-spread computation.
+# 50 stocks across 13 sectors → statistically robust bull_ratio, sector_breadth_spread,
+# and hi52_proximity signals.  Symbols must exist in cache/ (fetcher downloads these daily).
 PROXIES: list[tuple[str, str]] = [
-    ("RELIANCE",   "energy"),
-    ("TCS",        "it"),
-    ("HDFCBANK",   "banking"),
-    ("ICICIBANK",  "banking"),
-    ("INFY",       "it"),
-    ("HINDUNILVR", "fmcg"),
-    ("BHARTIARTL", "telecom"),
-    ("LT",         "infra"),
-    ("AXISBANK",   "banking"),
-    ("KOTAKBANK",  "banking"),
-    ("SBIN",       "banking"),
-    ("WIPRO",      "it"),
-    ("BAJFINANCE", "finance"),
-    ("MARUTI",     "auto"),
-    ("TATAMOTORS", "auto"),
+    # ── Banking / Finance ─────────────────────────────────────────────────────
+    ("HDFCBANK",     "banking"),
+    ("ICICIBANK",    "banking"),
+    ("AXISBANK",     "banking"),
+    ("KOTAKBANK",    "banking"),
+    ("SBIN",         "banking"),
+    ("INDUSINDBK",   "banking"),
+    ("BAJFINANCE",   "finance"),
+    ("BAJAJFINSV",   "finance"),
+    ("HDFCLIFE",     "finance"),
+    ("SBILIFE",      "finance"),
+
+    # ── IT / Technology ───────────────────────────────────────────────────────
+    ("TCS",          "it"),
+    ("INFY",         "it"),
+    ("WIPRO",        "it"),
+    ("HCLTECH",      "it"),
+    ("TECHM",        "it"),
+
+    # ── Energy / Oil & Gas ────────────────────────────────────────────────────
+    ("RELIANCE",     "energy"),
+    ("ONGC",         "energy"),
+    ("BPCL",         "energy"),
+    ("POWERGRID",    "energy"),
+    ("NTPC",         "energy"),
+
+    # ── FMCG / Consumer ───────────────────────────────────────────────────────
+    ("HINDUNILVR",   "fmcg"),
+    ("ITC",          "fmcg"),
+    ("NESTLEIND",    "fmcg"),
+    ("BRITANNIA",    "fmcg"),
+
+    # ── Auto / Mobility ───────────────────────────────────────────────────────
+    ("MARUTI",       "auto"),
+    ("TATAMOTORS",   "auto"),
+    ("M&M",          "auto"),
+    ("HEROMOTOCO",   "auto"),
+    ("EICHERMOT",    "auto"),
+
+    # ── Telecom ───────────────────────────────────────────────────────────────
+    ("BHARTIARTL",   "telecom"),
+
+    # ── Infrastructure / Capital Goods ───────────────────────────────────────
+    ("LT",           "infra"),
+    ("ADANIPORTS",   "infra"),
+    ("ULTRACEMCO",   "cement"),
+    ("GRASIM",       "cement"),
+    ("SHREECEM",     "cement"),
+
+    # ── Metals / Mining ───────────────────────────────────────────────────────
+    ("TATASTEEL",    "metals"),
+    ("JSWSTEEL",     "metals"),
+    ("HINDALCO",     "metals"),
+    ("COALINDIA",    "metals"),
+
+    # ── Pharma / Healthcare ───────────────────────────────────────────────────
+    ("SUNPHARMA",    "pharma"),
+    ("DRREDDY",      "pharma"),
+    ("CIPLA",        "pharma"),
+    ("DIVISLAB",     "pharma"),
+
+    # ── Consumer Durables ─────────────────────────────────────────────────────
+    ("TITAN",        "consumer"),
+    ("ASIANPAINT",   "consumer"),
+
+    # ── Gas / Utilities ───────────────────────────────────────────────────────
+    ("GAIL",         "gas"),
+    ("IOC",          "gas"),
 ]
 
 VALID_PROFILES = ["max-profit", "bear-fighter", "aggressive", "contrarian", "balanced"]

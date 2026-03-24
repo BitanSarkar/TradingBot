@@ -16,7 +16,8 @@ scipy>=1.12.0               # norm.ppf for parametric VaR in exit_signals.py
 requests>=2.31.0
 urllib3>=2.0.0          # used directly for Retry + HTTPAdapter pool tuning
 pyarrow>=15.0.0         # pandas parquet backend (data/cache.py)
-yfinance>=0.2.0         # OHLCV fallback when nselib fails (Yahoo Finance NSE mirror)
+yfinance>=0.2.0         # OHLCV fallback #2 — Yahoo Finance NSE mirror (stderr-suppressed)
+jugaad-data>=0.26       # OHLCV fallback #4 — jugaad_data.nse.stock_df (NSE historical)
 boto3>=1.34.0           # AWS SNS for end-of-day email notifications
 
 # News & sentiment

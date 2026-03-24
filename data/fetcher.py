@@ -31,6 +31,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 import pandas as pd
+import requests
 from requests.adapters import HTTPAdapter
 
 from data.cache import DataCache
@@ -41,7 +42,9 @@ _LOOKBACK_DAYS    = 365   # 1 year of daily OHLCV for indicator calculation
 _MAX_WORKERS      = 20    # parallel threads for nselib (keep <= 30)
 _YF_CHUNK         = 200   # symbols per yfinance batch call (avoids rate limiting)
 _NSELIB_FMT       = "%d-%m-%Y"   # nselib date format: DD-MM-YYYY
-_LIVE_QUOTE_TTL   = 90    # seconds — refresh live intraday candle at most every 90s
+_LIVE_QUOTE_TTL       = 90    # seconds — refresh live intraday candle at most every 90s
+_INTRADAY_5MIN_TTL    = 60    # seconds — refresh 5-min candles every 60s
+_INTRADAY_RECENT_N    = 6     # candles for v_recent (~30 min window)
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +137,7 @@ class DataFetcher:
     # In-memory live quote cache: symbol → (fetched_at_epoch, ohlcv_dict)
     # NOT saved to disk — live candles are ephemeral (not final EOD prices)
     _live_quotes: dict[str, tuple[float, dict]] = {}
+    _intraday_5min_cache: dict = {}   # symbol → (fetched_ts, [close, close, ...])
 
     def __init__(self, cache: DataCache, cache_only: bool = False) -> None:
         self._cache        = cache
@@ -296,6 +300,79 @@ class DataFetcher:
         df.sort_index(inplace=True)
         return df
 
+    # ------------------------------------------------------------------
+    # Intraday 5-min velocity
+    # ------------------------------------------------------------------
+
+    def get_intraday_velocities(self, symbol: str) -> tuple[float, float]:
+        """
+        Returns (v_session, v_recent) as % change per 5-min candle.
+        v_session = OLS slope over all candles today (full session trend)
+        v_recent  = OLS slope over last _INTRADAY_RECENT_N candles (~30 min)
+        Both normalised: (₹/candle) / first_close × 100
+        Returns (0.0, 0.0) when market closed, cache_only, or <3 candles.
+        """
+        import numpy as np
+        closes = self.get_intraday_5min_closes(symbol)
+        if len(closes) < 3:
+            return 0.0, 0.0
+        first = closes[0]
+        if first <= 0:
+            return 0.0, 0.0
+        arr = np.array(closes, dtype=float)
+        x_all = np.arange(len(arr), dtype=float)
+        v_session = float(np.polyfit(x_all, arr, 1)[0]) / first * 100.0
+        recent = arr[-_INTRADAY_RECENT_N:]
+        x_rec = np.arange(len(recent), dtype=float)
+        v_recent = float(np.polyfit(x_rec, recent, 1)[0]) / first * 100.0
+        return v_session, v_recent
+
+    def get_intraday_5min_closes(self, symbol: str) -> list:
+        """
+        Today's 5-min candle close prices, oldest-first.
+        Cached in-memory for _INTRADAY_5MIN_TTL seconds.
+        Returns [] when market closed / cache_only / API fail.
+        """
+        from market_hours import is_market_open
+        if self._cache_only or not is_market_open():
+            return []
+        import time as _time
+        cached = DataFetcher._intraday_5min_cache.get(symbol)
+        now_ts = _time.time()
+        if cached and (now_ts - cached[0]) < _INTRADAY_5MIN_TTL:
+            return cached[1]
+        closes = self._fetch_intraday_5min_closes_raw(symbol)
+        DataFetcher._intraday_5min_cache[symbol] = (now_ts, closes)
+        return closes
+
+    def _fetch_intraday_5min_closes_raw(self, symbol: str) -> list:
+        """Fetch today's 5-min candles from Groww public charting API."""
+        import datetime as _dt
+        from zoneinfo import ZoneInfo
+        try:
+            IST = ZoneInfo("Asia/Kolkata")
+            today = _dt.date.today()
+            session_open = _dt.datetime(today.year, today.month, today.day, 9, 15, 0, tzinfo=IST)
+            start_ms = int(session_open.timestamp() * 1000)
+            end_ms   = int(_dt.datetime.now(IST).timestamp() * 1000)
+            url = (
+                f"https://groww.in/v1/api/charting_service/v2/chart"
+                f"/exchange/NSE/segment/CASH/{symbol}"
+                f"?startTimeInMillis={start_ms}&endTimeInMillis={end_ms}"
+                f"&intervalInMinutes=5"
+            )
+            resp = requests.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            candles = resp.json().get("candles", [])
+            return [float(c[4]) for c in candles if len(c) >= 5]
+        except Exception as exc:
+            log.debug("[intraday_5min] %s: %s", symbol, exc)
+            return []
+
     def _fetch_live_quote_raw(self, symbol: str) -> dict | None:
         """
         Fetch today's intraday OHLCV candle for a symbol.
@@ -425,8 +502,72 @@ class DataFetcher:
             success += yf_ok
             log.info("yfinance batch done: ✓ %d  ✗ %d", yf_ok, len(yf_fail))
 
-        # ── Phase 3: nsepy (one-by-one, last resort) ──────────────────────
-        for sym in yf_fail:
+        # ── Phase 3: Groww charting API (parallel, no auth) ──────────────
+        groww_fail: list[str] = yf_fail
+        if yf_fail:
+            log.info("Groww fallback for %d symbols…", len(yf_fail))
+            with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+                futures = {pool.submit(self._groww_ohlcv, s, from_dt, today): s for s in yf_fail}
+                groww_fail = []
+                for fut in as_completed(futures):
+                    sym = futures[fut]
+                    try:
+                        df = fut.result()
+                        if df is not None and not df.empty:
+                            self._cache.save_ohlcv(sym, df)
+                            success += 1
+                        else:
+                            groww_fail.append(sym)
+                    except Exception as exc:
+                        log.debug("[groww] %s: %s", sym, exc)
+                        groww_fail.append(sym)
+            log.info("Groww done: ✓ %d  ✗ %d", len(yf_fail) - len(groww_fail), len(groww_fail))
+
+        # ── Phase 4: jugaad-data (parallel, NSE historical) ───────────────
+        jugaad_fail: list[str] = groww_fail
+        if groww_fail:
+            log.info("jugaad-data fallback for %d symbols…", len(groww_fail))
+            with ThreadPoolExecutor(max_workers=min(10, _MAX_WORKERS)) as pool:
+                futures = {pool.submit(self._jugaad_ohlcv, s, from_dt, today): s for s in groww_fail}
+                jugaad_fail = []
+                for fut in as_completed(futures):
+                    sym = futures[fut]
+                    try:
+                        df = fut.result()
+                        if df is not None and not df.empty:
+                            self._cache.save_ohlcv(sym, df)
+                            success += 1
+                        else:
+                            jugaad_fail.append(sym)
+                    except Exception as exc:
+                        log.debug("[jugaad] %s: %s", sym, exc)
+                        jugaad_fail.append(sym)
+            log.info("jugaad done: ✓ %d  ✗ %d", len(groww_fail) - len(jugaad_fail), len(jugaad_fail))
+
+        # ── Phase 5: NSE archives bhavcopy (date-range iteration) ─────────
+        nsearch_fail: list[str] = jugaad_fail
+        if jugaad_fail:
+            log.info("NSE-archives bhavcopy fallback for %d symbols…", len(jugaad_fail))
+            with ThreadPoolExecutor(max_workers=min(10, _MAX_WORKERS)) as pool:
+                futures = {pool.submit(self._nsearch_ohlcv, s, from_dt, today): s for s in jugaad_fail}
+                nsearch_fail = []
+                for fut in as_completed(futures):
+                    sym = futures[fut]
+                    try:
+                        df = fut.result()
+                        if df is not None and not df.empty:
+                            self._cache.save_ohlcv(sym, df)
+                            success += 1
+                        else:
+                            nsearch_fail.append(sym)
+                    except Exception as exc:
+                        log.debug("[nsearch] %s: %s", sym, exc)
+                        nsearch_fail.append(sym)
+            log.info("NSE-archives done: ✓ %d  ✗ %d", len(jugaad_fail) - len(nsearch_fail), len(nsearch_fail))
+
+        # ── Phase 6: nsepy (one-by-one, last resort) ──────────────────────
+        fail = 0
+        for sym in nsearch_fail:
             try:
                 df = self._nsepy_ohlcv(sym, from_dt, today)
                 if df is not None and not df.empty:
@@ -437,6 +578,8 @@ class DataFetcher:
             except Exception as exc:
                 log.debug("[nsepy] %s: %s", sym, exc)
                 fail += 1
+        if nsearch_fail:
+            log.info("nsepy done: ✓ %d  ✗ %d", len(nsearch_fail) - fail, fail)
 
         log.info("OHLCV refresh done: %d ok / %d failed.", success, fail)
         return success, fail
@@ -507,33 +650,31 @@ class DataFetcher:
 
     def _fetch_ohlcv_one(self, symbol: str) -> Optional[pd.DataFrame]:
         """
-        Single-symbol fetch (used by get_ohlcv() for on-demand loads).
-        Tries nselib → yfinance → nsepy in order.
-        NOT used for bulk bootstrap (use _parallel_fetch_ohlcv instead).
+        Single-symbol on-demand fetch.  10-source fallback chain:
+          1. nselib   — authoritative NSE feed
+          2. yfinance — Yahoo Finance NSE mirror
+          3. Groww    — charting API, no auth, reliable from any IP
+          4. jugaad-data — NSE historical via jugaad_data lib
+          5. NSE archives bhavcopy — date-range iteration via NSE cookie
+          6. nsepy    — last resort (broken on Python 3.14+)
         """
         today   = date.today()
         from_dt = today - timedelta(days=_LOOKBACK_DAYS)
 
-        try:
-            df = self._nselib_ohlcv(symbol, from_dt, today)
-            if df is not None and not df.empty:
-                return df
-        except Exception as exc:
-            log.debug("[nselib] %s: %s", symbol, exc)
-
-        try:
-            df = self._yfinance_ohlcv(symbol, from_dt, today)
-            if df is not None and not df.empty:
-                return df
-        except Exception as exc:
-            log.debug("[yfinance] %s: %s", symbol, exc)
-
-        try:
-            df = self._nsepy_ohlcv(symbol, from_dt, today)
-            if df is not None and not df.empty:
-                return df
-        except Exception as exc:
-            log.debug("[nsepy] %s: %s", symbol, exc)
+        for method, fn in [
+            ("nselib",   lambda: self._nselib_ohlcv(symbol, from_dt, today)),
+            ("yfinance", lambda: self._yfinance_ohlcv(symbol, from_dt, today)),
+            ("groww",    lambda: self._groww_ohlcv(symbol, from_dt, today)),
+            ("jugaad",   lambda: self._jugaad_ohlcv(symbol, from_dt, today)),
+            ("nsearch",  lambda: self._nsearch_ohlcv(symbol, from_dt, today)),
+            ("nsepy",    lambda: self._nsepy_ohlcv(symbol, from_dt, today)),
+        ]:
+            try:
+                df = fn()
+                if df is not None and not df.empty:
+                    return df
+            except Exception as exc:
+                log.debug("[%s] %s: %s", method, symbol, exc)
 
         return None
 
@@ -570,12 +711,153 @@ class DataFetcher:
             return None
         return _normalise_nsepy(df)
 
+    def _groww_ohlcv(self, symbol: str, from_dt: date, to_dt: date) -> Optional[pd.DataFrame]:
+        """
+        Groww charting API — works from any IP including EC2, no auth.
+        Returns daily candles as [epoch_ms, open, high, low, close, volume].
+        intervalInMinutes=1440 → 1 calendar day per candle.
+        """
+        import datetime as _dt
+        start_ms = int(_dt.datetime.combine(from_dt, _dt.time.min).timestamp()) * 1000
+        end_ms   = int(_dt.datetime.combine(to_dt,   _dt.time.min).timestamp()) * 1000
+        url = (
+            f"https://groww.in/v1/api/charting_service/v2/chart"
+            f"/exchange/NSE/segment/CASH/{symbol}"
+            f"?startTimeInMillis={start_ms}&endTimeInMillis={end_ms}"
+            f"&intervalInMinutes=1440"
+        )
+        resp = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        candles = resp.json().get("candles", [])
+        if not candles:
+            return None
+        rows = []
+        for c in candles:
+            # [epoch_ms_or_s, open, high, low, close, volume]
+            ts = c[0]
+            dt = _dt.datetime.fromtimestamp(ts / 1000 if ts > 1e10 else ts)
+            rows.append({"Date": dt.date(), "Open": c[1], "High": c[2],
+                         "Low": c[3], "Close": c[4], "Volume": c[5]})
+        df = pd.DataFrame(rows).set_index("Date")
+        df.index = pd.to_datetime(df.index)
+        df.sort_index(inplace=True)
+        return df.apply(pd.to_numeric, errors="coerce").dropna(how="all")
+
+    def _jugaad_ohlcv(self, symbol: str, from_dt: date, to_dt: date) -> Optional[pd.DataFrame]:
+        """
+        jugaad-data NSE historical — fetches from NSE via jugaad_data lib.
+        Installed via: pip install jugaad-data
+        """
+        from jugaad_data.nse import stock_df as jd_stock_df
+        df = jd_stock_df(symbol=symbol, from_date=from_dt, to_date=to_dt)
+        if df is None or df.empty:
+            return None
+        # Columns: DATE, OPEN, HIGH, LOW, CLOSE, VOLUME (or similar)
+        col_map = {
+            "DATE": "Date", "OPEN": "Open", "HIGH": "High",
+            "LOW": "Low", "CLOSE": "Close", "VOLUME": "Volume",
+            # jugaad uses TOTTRDQTY for volume sometimes
+            "TOTTRDQTY": "Volume",
+        }
+        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+        if "Date" not in df.columns:
+            df = df.reset_index()
+            df = df.rename(columns={df.columns[0]: "Date"})
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.set_index("Date").sort_index()
+        keep = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
+        return df[keep].apply(pd.to_numeric, errors="coerce").dropna(how="all")
+
+    def _nsearch_ohlcv(self, symbol: str, from_dt: date, to_dt: date) -> Optional[pd.DataFrame]:
+        """
+        NSE archives bhavcopy — fetches daily snapshot CSVs from
+        nsearchives.nseindia.com using the shared NSE cookie session.
+        Iterates over every calendar day in [from_dt, to_dt], downloads
+        the all-symbol bhavcopy for each trading day, filters to `symbol`.
+        Slow (one HTTP call per trading day) but very reliable.
+        """
+        import io as _io
+        from datetime import timedelta as _td
+
+        session  = self._get_nse_session()
+        rows: list[dict] = []
+        cursor = from_dt
+
+        while cursor <= to_dt:
+            dd = cursor.strftime("%d%m%Y")  # e.g. 20032026
+            url = (
+                f"https://nsearchives.nseindia.com/products/content/"
+                f"sec_bhavdata_full_{dd}.csv"
+            )
+            try:
+                r = session.get(url, timeout=8)
+                if r.status_code != 200 or len(r.text) < 100:
+                    cursor += _td(days=1)
+                    continue
+                df_day = pd.read_csv(_io.StringIO(r.text))
+                df_day.columns = df_day.columns.str.strip()
+                row = df_day[df_day["SYMBOL"].str.strip() == symbol]
+                if not row.empty:
+                    rows.append({
+                        "Date":   pd.to_datetime(row["DATE1"].iloc[0], dayfirst=True),
+                        "Open":   float(row["OPEN_PRICE"].iloc[0]),
+                        "High":   float(row["HIGH_PRICE"].iloc[0]),
+                        "Low":    float(row["LOW_PRICE"].iloc[0]),
+                        "Close":  float(row["CLOSE_PRICE"].iloc[0]),
+                        "Volume": float(row["TTL_TRD_QNTY"].iloc[0]),
+                    })
+            except Exception:
+                pass
+            cursor += _td(days=1)
+
+        if not rows:
+            return None
+        df = pd.DataFrame(rows).set_index("Date").sort_index()
+        return df.apply(pd.to_numeric, errors="coerce").dropna(how="all")
+
     # ------------------------------------------------------------------
     # Fundamentals — NSE equity info API (weekly refresh)
     # ------------------------------------------------------------------
 
+    def _load_nselib_pe_bulk(self) -> dict:
+        """
+        One API call → dict[symbol → P/E] for every NSE-listed stock.
+        Tries last 7 calendar days to skip weekends / holidays.
+        Returns {} on any failure — callers degrade gracefully.
+        """
+        from datetime import timedelta
+        try:
+            from nselib import capital_market as cm
+            for offset in range(7):
+                d = date.today() - timedelta(days=offset)
+                try:
+                    df = cm.pe_ratio(trade_date=d.strftime("%d-%m-%Y"))
+                    if df is not None and not df.empty and "SYMBOL" in df.columns:
+                        log.info(
+                            "nselib pe_ratio: loaded %d symbols (%s)",
+                            len(df), d.strftime("%d-%m-%Y"),
+                        )
+                        return {
+                            str(row["SYMBOL"]).strip(): float(row["SYMBOLP/E"])
+                            for _, row in df.iterrows()
+                            if row.get("SYMBOLP/E") not in (None, "", "–", "-")
+                        }
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        log.debug("nselib pe_ratio bulk load failed — skipping Method 2.")
+        return {}
+
     def _parallel_fetch_fundamentals(self, symbols: list[str]) -> int:
         """Returns ok_count (number of symbols with data saved)."""
+        # Pre-load bulk P/E once — shared read-only across all threads
+        self._nselib_pe_bulk: dict = self._load_nselib_pe_bulk()
+
         success = done = 0
         total = len(symbols)
         _PROGRESS_EVERY = max(1, min(200, total // 10))
@@ -690,10 +972,15 @@ class DataFetcher:
     def _fetch_fund_one(self, symbol: str) -> dict:
         """
         Pull P/E, P/B, EPS, market cap, ROE.
-        Tries NSE quote API first; falls back to yfinance Ticker.info.
-        Returns {} if both sources fail — scoring degrades to technical only.
+
+        Fallback chain (first success wins):
+          Method 1 — NSE quote-equity API   full data, authoritative (~254 large-caps)
+          Method 2 — nselib pe_ratio bulk   P/E only, pre-loaded (all Nifty stocks)
+          Method 3 — yfinance Ticker.info   full data, stdout/stderr suppressed (no 401 spam)
+
+        Returns {} if all three fail — scoring degrades to technical-only.
         """
-        # ── Method 1: NSE quote API ───────────────────────────────────────
+        # ── Method 1: NSE quote-equity API ───────────────────────────────
         try:
             session = self._get_nse_session()
             url  = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
@@ -721,23 +1008,109 @@ class DataFetcher:
         except Exception:
             pass
 
-        # ── Method 2: yfinance Ticker.info ───────────────────────────────
+        # ── Method 2: nselib pe_ratio bulk (pre-loaded, zero extra network call) ──
+        pe_bulk: dict = getattr(self, "_nselib_pe_bulk", {})
+        pe_val = pe_bulk.get(symbol)
+        if pe_val is not None:
+            # Partial data — only P/E known; scoring will use what it can.
+            return {"pe": pe_val}
+
+        # ── Method 3: yfinance Ticker.info (stdout/stderr suppressed) ────
+        # Yahoo Finance prints "HTTP Error 401" directly to stdout before
+        # raising — redirect both streams to /dev/null so logs stay clean.
         try:
+            import contextlib, io
             import yfinance as yf
-            info = yf.Ticker(f"{symbol}.NS").info
-            if not info:
-                return {}
-            pe = info.get("trailingPE") or info.get("forwardPE")
-            result = {
-                "pe":         pe,
-                "pb":         info.get("priceToBook"),
-                "eps":        info.get("trailingEps"),
-                "market_cap": info.get("marketCap"),
-                "52w_high":   info.get("fiftyTwoWeekHigh"),
-                "52w_low":    info.get("fiftyTwoWeekLow"),
-                "roe":        info.get("returnOnEquity"),
-                "div_yield":  info.get("dividendYield"),
-            }
-            return result if pe is not None else {}
+            _sink = io.StringIO()
+            with contextlib.redirect_stdout(_sink), contextlib.redirect_stderr(_sink):
+                info = yf.Ticker(f"{symbol}.NS").info
+            if info:
+                pe = info.get("trailingPE") or info.get("forwardPE")
+                result = {
+                    "pe":         pe,
+                    "pb":         info.get("priceToBook"),
+                    "eps":        info.get("trailingEps"),
+                    "market_cap": info.get("marketCap"),
+                    "52w_high":   info.get("fiftyTwoWeekHigh"),
+                    "52w_low":    info.get("fiftyTwoWeekLow"),
+                    "roe":        info.get("returnOnEquity"),
+                    "div_yield":  info.get("dividendYield"),
+                }
+                if pe is not None:
+                    return result
         except Exception:
-            return {}
+            pass
+
+        # ── Method 4: Screener.in (HTML parse — no auth, works for all NSE stocks) ──
+        # Parses the #top-ratios section: Market Cap, Stock P/E, Book Value,
+        # Dividend Yield, ROE.  Computes P/B = Current Price / Book Value.
+        try:
+            import re as _re
+            _scrn_headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                "Accept":          "text/html,application/xhtml+xml,*/*;q=0.9",
+                "Accept-Language": "en-IN,en;q=0.9",
+                "Referer":         "https://www.screener.in/",
+            }
+            _r = requests.get(
+                f"https://www.screener.in/company/{symbol}/",
+                headers=_scrn_headers, timeout=10,
+            )
+            if _r.status_code == 200:
+                _html  = _r.text
+                _start = _html.find('top-ratios')
+                if _start != -1:
+                    _section = _html[_start: _start + 4000]
+                    # Each <li> has one <span class="name"> and one or two
+                    # <span class="number"> children. Parse per-block.
+                    _li_blocks = _re.findall(
+                        r'<li[^>]*data-source[^>]*>(.*?)</li>',
+                        _section, _re.DOTALL,
+                    )
+                    _ratios: dict = {}
+                    for _block in _li_blocks:
+                        _nm  = _re.search(r'<span class="name">\s*(.*?)\s*</span>', _block, _re.DOTALL)
+                        _nums = _re.findall(r'<span class="number">([\d,./]+)</span>', _block)
+                        if _nm and _nums:
+                            _key = _nm.group(1).strip()
+                            _ratios[_key] = _nums   # list of raw strings
+
+                    def _num(raw: str) -> Optional[float]:
+                        try:
+                            return float(raw.replace(",", "").split("/")[0])
+                        except Exception:
+                            return None
+
+                    _pe    = _num((_ratios.get("Stock P/E",   [""])[0]))
+                    _price = _num((_ratios.get("Current Price",[""])[0]))
+                    _bv    = _num((_ratios.get("Book Value",  [""])[0]))
+                    _mcap  = _num((_ratios.get("Market Cap",  [""])[0]))  # in Cr
+                    _dy    = _num((_ratios.get("Dividend Yield", [""])[0]))
+                    _roe   = _num((_ratios.get("ROE",         [""])[0]))
+                    _hi    = _num((_ratios.get("High / Low",  ["", ""])[0]))
+                    _lo_l  = _ratios.get("High / Low", ["", ""])
+                    _lo    = _num(_lo_l[1]) if len(_lo_l) > 1 else None
+                    _pb    = (
+                        round(_price / _bv, 2)
+                        if _price and _bv and _bv != 0
+                        else None
+                    )
+                    result = {
+                        "pe":         _pe,
+                        "pb":         _pb,
+                        "market_cap": (_mcap * 1e7) if _mcap else None,  # Cr → INR
+                        "52w_high":   _hi,
+                        "52w_low":    _lo,
+                        "roe":        (_roe / 100.0) if _roe else None,  # % → fraction
+                        "div_yield":  (_dy  / 100.0) if _dy  else None,
+                    }
+                    if result.get("pe") is not None:
+                        return result
+        except Exception:
+            pass
+
+        return {}

@@ -51,6 +51,9 @@ import pandas as pd
 
 log = logging.getLogger("ExitSignals")
 
+# ── Score high-water mark tracking (in-memory, resets on restart) ─────────────
+_score_high_water: dict[str, float] = {}  # symbol → highest score seen while holding
+
 
 # ── Output dataclass ──────────────────────────────────────────────────────────
 
@@ -205,3 +208,65 @@ def compute_exit_levels(
         stop_pct=stop_pct,
         method=method,
     )
+
+
+# ── Intraday score-based smart exits ─────────────────────────────────────────
+
+def check_intraday_exit(
+    symbol:          str,
+    composite_score: float,
+    score_velocity:  float,
+    v_recent:        float,
+    min_score:       float,
+    peak_exit_pct:   float = 0.07,
+    collapse_score_ratio:     float = 0.80,
+    collapse_velocity_floor:  float = -4.0,
+    collapse_price_vel_floor: float = -0.3,
+) -> tuple[bool, str]:
+    """
+    Returns (should_exit, reason).
+
+    Signal A — Sell at peak:
+      Update score high-water mark.
+      If score dropped >= peak_exit_pct from high-water → exit.
+      Reason: "score_peak_exit: {high:.1f}→{now:.1f} ({drop:.1%} drop)"
+
+    Signal B — Collapse:
+      All three: score < min×ratio AND vel < floor AND price_vel < floor
+      Reason: "collapse_exit: score={score:.1f} vel={vel:.1f} pvel={pvel:.2f}"
+
+    Cleans up high-water entry when exit fires.
+    """
+    # Update high-water mark
+    prev_hw = _score_high_water.get(symbol, composite_score)
+    hw = max(prev_hw, composite_score)
+    _score_high_water[symbol] = hw
+
+    # Signal A — sell at peak
+    if hw > 0:
+        drop = (hw - composite_score) / hw
+        if drop >= peak_exit_pct:
+            del _score_high_water[symbol]
+            return True, (
+                f"score_peak_exit: {hw:.1f}→{composite_score:.1f} ({drop:.1%} drop)"
+            )
+
+    # Signal B — collapse
+    collapse = (
+        composite_score < min_score * collapse_score_ratio
+        and score_velocity  < collapse_velocity_floor
+        and v_recent        < collapse_price_vel_floor
+    )
+    if collapse:
+        _score_high_water.pop(symbol, None)
+        return True, (
+            f"collapse_exit: score={composite_score:.1f} "
+            f"vel={score_velocity:.1f} pvel={v_recent:.2f}"
+        )
+
+    return False, ""
+
+
+def clear_high_water(symbol: str) -> None:
+    """Call this when a position is closed for any reason."""
+    _score_high_water.pop(symbol, None)

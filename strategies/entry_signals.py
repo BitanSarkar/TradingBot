@@ -153,9 +153,12 @@ class EntryQuality:
     price_score:    float  = 0.0
     volume_score:   float  = 0.0
     regime_score:   float  = 0.0
-    is_divergence:  bool   = False
-    atr:            float  = 0.0
-    reason:         str    = ""
+    is_divergence:        bool   = False
+    atr:                  float  = 0.0
+    reason:               str    = ""
+    price_velocity_score: float  = 0.0
+    intraday_mode:        str    = "UNKNOWN"
+    entry_premium:        float  = 0.0
 
 
 # ── Score history tracker (maintained by the strategy across ticks) ───────────
@@ -211,6 +214,43 @@ class ScoreHistory:
             log.warning("ScoreHistory load failed: %s", exc)
 
 
+# ── Intraday mode detection ───────────────────────────────────────────────────
+
+def detect_intraday_mode(
+    v_session: float,
+    v_recent:  float,
+    composite_score: float,
+    score_velocity:  float,
+    min_score:       float,
+) -> tuple[str, float]:
+    """
+    Determine intraday entry mode from velocity + score signals.
+
+    Returns (mode, entry_premium) where:
+      mode ∈ {"MOMENTUM_CHASE", "DIP_BUY", "NO_ENTRY"}
+      entry_premium = fractional premium above LTP for limit order
+        0.001 for MOMENTUM_CHASE (+0.1%)
+        0.000 for DIP_BUY (at market)
+
+    Logic:
+      momentum_intact = score ≥ min_score AND score_velocity > -2.0
+      v_session > 0 + v_recent > 0 + intact  → MOMENTUM_CHASE
+      v_session > 0 + v_recent < 0 + intact  → DIP_BUY
+      anything else                           → NO_ENTRY
+    """
+    momentum_intact = (
+        composite_score >= min_score
+        and score_velocity > -2.0
+    )
+    if not momentum_intact:
+        return "NO_ENTRY", 0.0
+    if v_session > 0 and v_recent > 0:
+        return "MOMENTUM_CHASE", 0.001
+    if v_session > 0 and v_recent < 0:
+        return "DIP_BUY", 0.0
+    return "NO_ENTRY", 0.0
+
+
 # ── Core computation ──────────────────────────────────────────────────────────
 
 def compute_entry_quality(
@@ -245,6 +285,14 @@ def compute_entry_quality(
     w_price:                float = 0.35,
     w_volume:               float = 0.15,
     w_regime:               float = 0.20,
+    # Intraday velocity parameters
+    v_session:              float = 0.0,
+    v_recent:               float = 0.0,
+    price_velocity_clamp:   float = 0.3,
+    w_price_velocity:       float = 0.0,
+    momentum_chase_premium: float = 0.001,
+    # min_score used for intraday mode gate
+    min_score_overall:      float = 0.0,
 ) -> EntryQuality:
     """
     Compute entry quality for a single BUY candidate.
@@ -395,6 +443,36 @@ def compute_entry_quality(
     price_score = 0.40 * rsi_score + 0.35 * bb_score + 0.25 * support_score
 
     # ─────────────────────────────────────────────────────────────────────────
+    # 2b. PRICE VELOCITY SCORE (from intraday 5-min OLS slope)
+    # ─────────────────────────────────────────────────────────────────────────
+    pv_clamped           = max(-price_velocity_clamp, min(v_session, price_velocity_clamp))
+    price_velocity_score = 50.0 + (pv_clamped / price_velocity_clamp) * 50.0 if price_velocity_clamp > 0 else 50.0
+
+    # ── Intraday mode gate (only applies when we have real intraday data) ─────
+    intraday_mode   = "UNKNOWN"
+    entry_premium   = 0.0
+    _has_intraday   = (v_session != 0.0 or v_recent != 0.0)
+
+    if _has_intraday:
+        intraday_mode, entry_premium = detect_intraday_mode(
+            v_session        = v_session,
+            v_recent         = v_recent,
+            composite_score  = current_score,
+            score_velocity   = velocity,
+            min_score        = min_score_overall if min_score_overall > 0 else 0.0,
+        )
+        if intraday_mode == "NO_ENTRY":
+            return EntryQuality(
+                qualified=False, entry_price=current_ltp, use_limit=False,
+                quality_score=0.0, score_velocity=velocity, score_accel=accel,
+                velocity_score=velocity_score, price_score=price_score,
+                price_velocity_score=price_velocity_score,
+                intraday_mode=intraday_mode, entry_premium=entry_premium,
+                atr=0.0,
+                reason=f"intraday_mode=NO_ENTRY (v_session={v_session:.3f} v_recent={v_recent:.3f})",
+            )
+
+    # ─────────────────────────────────────────────────────────────────────────
     # 3. VOLUME CONFIRMATION
     # ─────────────────────────────────────────────────────────────────────────
     vol_avg20  = float(volume.rolling(20).mean().iloc[-1])
@@ -407,6 +485,8 @@ def compute_entry_quality(
             qualified=False, entry_price=current_ltp, use_limit=False,
             quality_score=0.0, score_velocity=velocity, score_accel=accel,
             velocity_score=velocity_score, price_score=price_score,
+            price_velocity_score=price_velocity_score,
+            intraday_mode=intraday_mode, entry_premium=entry_premium,
             atr=atr,
             reason=f"volume too thin (ratio={vol_ratio:.2f} < {vol_min_ratio:.2f})",
         )
@@ -480,10 +560,11 @@ def compute_entry_quality(
     # 5. COMPOSITE ENTRY QUALITY
     # ─────────────────────────────────────────────────────────────────────────
     quality = (
-        w_velocity * velocity_score
-      + w_price    * price_score
-      + w_volume   * volume_score
-      + w_regime   * regime_score
+        w_velocity       * velocity_score
+      + w_price          * price_score
+      + w_volume         * volume_score
+      + w_regime         * regime_score
+      + w_price_velocity * price_velocity_score
     )
 
     if quality < min_quality_score:
@@ -493,10 +574,13 @@ def compute_entry_quality(
             velocity_score=velocity_score, price_score=price_score,
             volume_score=volume_score, regime_score=regime_score, atr=atr,
             is_divergence=is_divergence,
+            price_velocity_score=price_velocity_score,
+            intraday_mode=intraday_mode, entry_premium=entry_premium,
             reason=(
                 f"quality={quality:.1f} < threshold={min_quality_score:.0f} "
                 f"(vel={velocity_score:.0f} price={price_score:.0f} "
-                f"vol={volume_score:.0f} regime={regime_score:.0f})"
+                f"vol={volume_score:.0f} regime={regime_score:.0f} "
+                f"pvel={price_velocity_score:.0f})"
             ),
         )
 
@@ -508,6 +592,8 @@ def compute_entry_quality(
     #   The wider the pullback, the better R:R on a stock that may dip further
     #   before reversing upward.
     #
+    # MOMENTUM_CHASE (intraday): buy above LTP by entry_premium fraction.
+    #
     # Normal buys:
     #   High quality (≥ 80): enter at market — don't risk missing the move
     #   Medium quality (55–80): set a limit order slightly below for better fill
@@ -515,6 +601,10 @@ def compute_entry_quality(
         use_limit      = True
         # Enhanced pullback for bear-market dip buys
         entry_price    = current_ltp - (entry_pullback_mult * 1.5) * atr
+    elif intraday_mode == "MOMENTUM_CHASE":
+        # Chase the momentum: place limit slightly above LTP
+        use_limit   = True
+        entry_price = current_ltp * (1.0 + entry_premium)
     elif quality >= 80.0 or entry_pullback_mult == 0:
         use_limit      = False
         entry_price    = current_ltp
@@ -528,12 +618,14 @@ def compute_entry_quality(
         use_limit      = True
 
     divergence_tag = " ⚡DIVERGENCE" if is_divergence else ""
+    intraday_tag   = f" [{intraday_mode}]" if intraday_mode not in ("UNKNOWN",) else ""
     reason = (
-        f"quality={quality:.1f}/100 ✓{divergence_tag} "
+        f"quality={quality:.1f}/100 ✓{divergence_tag}{intraday_tag} "
         f"| vel={velocity:+.2f}pt/tick (score={velocity_score:.0f}) "
         f"| price_score={price_score:.0f} (RSI={rsi:.0f} %B={pct_b:.2f}) "
         f"| vol={vol_ratio:.2f}x avg (score={volume_score:.0f}) "
         f"| regime={regime_score:.0f} "
+        f"| pvel_score={price_velocity_score:.0f} "
         f"| {'LIMIT @₹' + str(round(entry_price, 2)) if use_limit else 'MARKET'}"
     )
 
@@ -551,4 +643,7 @@ def compute_entry_quality(
         is_divergence=is_divergence,
         atr=atr,
         reason=reason,
+        price_velocity_score=price_velocity_score,
+        intraday_mode=intraday_mode,
+        entry_premium=entry_premium,
     )

@@ -158,10 +158,29 @@ class Config:
     entry_limit_timeout_ticks:  int   = field(default_factory=lambda: _int  ("ENTRY_LIMIT_TIMEOUT_TICKS",   3))
 
     # Sub-weights for entry quality composite (must sum to 1.0)
-    entry_w_velocity:           float = field(default_factory=lambda: _float("ENTRY_W_VELOCITY",            0.30))
-    entry_w_price:              float = field(default_factory=lambda: _float("ENTRY_W_PRICE",               0.35))
+    entry_w_velocity:           float = field(default_factory=lambda: _float("ENTRY_W_VELOCITY",            0.25))
+    entry_w_price:              float = field(default_factory=lambda: _float("ENTRY_W_PRICE",               0.25))
     entry_w_volume:             float = field(default_factory=lambda: _float("ENTRY_W_VOLUME",              0.15))
     entry_w_regime:             float = field(default_factory=lambda: _float("ENTRY_W_REGIME",              0.20))
+    entry_w_price_velocity:     float = field(default_factory=lambda: _float("ENTRY_W_PRICE_VELOCITY",      0.15))
+
+    # ── Intraday velocity ──────────────────────────────────────────────────────
+    intraday_momentum_chase_premium: float = field(
+        default_factory=lambda: _float("INTRADAY_MOMENTUM_CHASE_PREMIUM", 0.01))
+    intraday_velocity_min_candles: int = field(
+        default_factory=lambda: _int("INTRADAY_VELOCITY_MIN_CANDLES", 3))
+
+    # ── Score peak exit (Signal A) ────────────────────────────────────────────
+    score_peak_exit_pct: float = field(
+        default_factory=lambda: _float("SCORE_PEAK_EXIT_PCT", 0.07))  # 7% drop from peak
+
+    # ── Collapse exit (Signal B) ──────────────────────────────────────────────
+    collapse_score_ratio:    float = field(
+        default_factory=lambda: _float("COLLAPSE_SCORE_RATIO",    0.80))  # 80% of min_score
+    collapse_velocity_threshold: float = field(
+        default_factory=lambda: _float("COLLAPSE_VELOCITY_THRESHOLD", -4.0))
+    collapse_price_vel_threshold: float = field(
+        default_factory=lambda: _float("COLLAPSE_PRICE_VEL_THRESHOLD", -0.3))
 
     # ── Position Sizing ───────────────────────────────────────────────────────
     # deploy_fraction: fraction of available CNC balance to spread across holdings

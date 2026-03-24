@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from strategies.base import BaseStrategy, Signal, TradeSignal
 from strategies.entry_signals import ScoreHistory, compute_entry_quality
+from strategies.exit_signals import check_intraday_exit, clear_high_water
 
 if TYPE_CHECKING:
     from scoring.engine import ScoringEngine
@@ -168,6 +169,8 @@ class ScoreBasedStrategy(BaseStrategy):
             df      = self._fetcher._cache.load_ohlcv(candidate.symbol)
             history = self._score_history.get(candidate.symbol)
 
+            v_session, v_recent = self._fetcher.get_intraday_velocities(candidate.symbol)
+
             entry = compute_entry_quality(
                 df                          = df,
                 current_score               = candidate.composite,
@@ -190,6 +193,11 @@ class ScoreBasedStrategy(BaseStrategy):
                 w_price                     = cfg.entry_w_price,
                 w_volume                    = cfg.entry_w_volume,
                 w_regime                    = cfg.entry_w_regime,
+                v_session                   = v_session,
+                v_recent                    = v_recent,
+                w_price_velocity            = cfg.entry_w_price_velocity,
+                momentum_chase_premium      = cfg.intraday_momentum_chase_premium,
+                min_score_overall           = cfg.score_buy_threshold,
             )
 
             if not entry.qualified:
@@ -203,12 +211,18 @@ class ScoreBasedStrategy(BaseStrategy):
             if entry.use_limit:
                 self._pending_limits[candidate.symbol] = 0
 
+            # For MOMENTUM_CHASE: use entry_premium above LTP
+            if entry.intraday_mode == "MOMENTUM_CHASE" and ltp > 0:
+                limit_price = ltp * (1.0 + entry.entry_premium)
+            else:
+                limit_price = entry.entry_price
+
             signals.append(TradeSignal(
                 symbol     = candidate.symbol,
                 signal     = Signal.BUY,
                 quantity   = qty,
                 order_type = order_type,
-                price      = entry.entry_price if entry.use_limit else 0.0,
+                price      = limit_price if entry.use_limit else 0.0,
                 reason     = (
                     f"score={candidate.composite:.1f} "
                     f"(tech={candidate.technical:.0f} "
@@ -230,6 +244,8 @@ class ScoreBasedStrategy(BaseStrategy):
         #   3. Chandelier trailing stop (peak − ATR×mult) — arms after N% gain
         #   4. Score exit — only fires when already in profit
         #   5. Emergency exit — score collapsed below threshold (sell even at loss)
+        #   6. Intraday score peak exit (Signal A) — score dropped from high-water
+        #   7. Intraday collapse exit (Signal B) — simultaneous score+vel+price collapse
         from strategies.exit_signals import compute_exit_levels
 
         score_map = {s.symbol: s for s in scores}
@@ -260,6 +276,13 @@ class ScoreBasedStrategy(BaseStrategy):
 
             sell_reason: str | None = None
 
+            # Ensure score high-water is tracked for this position on every tick
+            # (initialises on first tick if not already set)
+            from strategies.exit_signals import _score_high_water as _hw_dict
+            stock_score_now = score_map.get(pos.symbol)
+            if stock_score_now is not None and pos.symbol not in _hw_dict:
+                _hw_dict[pos.symbol] = stock_score_now.composite
+
             # 1. Stop-loss (ATR/VaR blended — computed per stock)
             if ltp <= exits.stop_loss:
                 sell_reason = (
@@ -288,6 +311,20 @@ class ScoreBasedStrategy(BaseStrategy):
                 if stock_score is not None:
                     composite = stock_score.composite
 
+                    # Compute score velocity for this position (for intraday exits)
+                    import numpy as np
+                    pos_history = self._score_history.get(pos.symbol)
+                    all_s = list(pos_history) + [composite]
+                    if len(all_s) >= 3:
+                        n = min(cfg.entry_velocity_window, len(all_s))
+                        vals = np.array(all_s[-n:], dtype=float)
+                        score_vel = float(np.polyfit(np.arange(n, dtype=float), vals, 1)[0])
+                    else:
+                        score_vel = 0.0
+
+                    # Get intraday price velocity for this position
+                    _, pos_v_recent = self._fetcher.get_intraday_velocities(pos.symbol)
+
                     # 4. Score exit — only when in profit
                     if composite < cfg.score_sell_threshold and pnl_pct > 0:
                         sell_reason = (
@@ -303,7 +340,24 @@ class ScoreBasedStrategy(BaseStrategy):
                             f"P&L={pnl_pct:+.1f}%"
                         )
 
+                    # 6 & 7. Intraday smart exits (Signal A: peak exit, Signal B: collapse)
+                    else:
+                        should_exit, intraday_reason = check_intraday_exit(
+                            symbol                   = pos.symbol,
+                            composite_score          = composite,
+                            score_velocity           = score_vel,
+                            v_recent                 = pos_v_recent,
+                            min_score                = cfg.score_buy_threshold,
+                            peak_exit_pct            = cfg.score_peak_exit_pct,
+                            collapse_score_ratio     = cfg.collapse_score_ratio,
+                            collapse_velocity_floor  = cfg.collapse_velocity_threshold,
+                            collapse_price_vel_floor = cfg.collapse_price_vel_threshold,
+                        )
+                        if should_exit:
+                            sell_reason = f"INTRADAY EXIT: {intraday_reason}"
+
             if sell_reason:
+                clear_high_water(pos.symbol)
                 signals.append(TradeSignal(
                     symbol=pos.symbol,
                     signal=Signal.SELL,
