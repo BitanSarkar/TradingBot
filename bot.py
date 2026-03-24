@@ -186,8 +186,9 @@ class TradingBot:
             )
             client = GrowwAPI(token)
             # Push new client into OrderManager and PositionTracker
-            self.orders._client    = client
-            self.positions._client = client
+            # Both live on self.strategy, not directly on TradingBot
+            self.strategy.orders._client    = client
+            self.strategy.positions._client = client
             self._token_refreshed_date = today
             log.info("Groww token refreshed successfully for %s.", today)
             return True
