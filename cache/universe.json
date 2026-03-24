@@ -1,5 +1,5 @@
 {
-  "date": "2026-03-20",
+  "date": "2026-03-25",
   "stocks": {
     "20MICRONS": {
       "name": "20 Microns Limited",
@@ -24,7 +24,7 @@
     "3MINDIA": {
       "name": "3M India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "3PLAND": {
       "name": "3P Land Holdings Limited",
@@ -99,7 +99,7 @@
     "AAVAS": {
       "name": "Aavas Financiers Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ABB": {
       "name": "ABB India Limited",
@@ -109,7 +109,7 @@
     "ABBOTINDIA": {
       "name": "Abbott India Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "ABCAPITAL": {
       "name": "Aditya Birla Capital Limited",
@@ -129,7 +129,7 @@
     "ABFRL": {
       "name": "Aditya Birla Fashion and Retail Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ABINFRA": {
       "name": "A B Infrabuild Limited",
@@ -139,7 +139,7 @@
     "ABLBL": {
       "name": "Aditya Birla Lifestyle Brands Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ABREL": {
       "name": "Aditya Birla Real Estate Limited",
@@ -149,7 +149,7 @@
     "ABSLAMC": {
       "name": "Aditya Birla Sun Life AMC Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ACC": {
       "name": "ACC Limited",
@@ -169,7 +169,7 @@
     "ACE": {
       "name": "Action Construction Equipment Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ACEINTEG": {
       "name": "Ace Integrated Solutions Limited",
@@ -189,7 +189,7 @@
     "ACMESOLAR": {
       "name": "Acme Solar Holdings Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ACUTAAS": {
       "name": "Acutaas Chemicals Limited",
@@ -209,7 +209,7 @@
     "ADANIGREEN": {
       "name": "Adani Green Energy Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "ADANIPORTS": {
       "name": "Adani Ports and Special Economic Zone Limited",
@@ -219,7 +219,7 @@
     "ADANIPOWER": {
       "name": "Adani Power Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "ENERGY"
     },
     "ADFFOODS": {
       "name": "ADF Foods Limited",
@@ -274,7 +274,7 @@
     "AEGISLOG": {
       "name": "Aegis Logistics Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "AEGISVOPAK": {
       "name": "Aegis Vopak Terminals Limited",
@@ -339,7 +339,7 @@
     "AGARWALEYE": {
       "name": "Dr. Agarwal's Health Care Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "AGI": {
       "name": "AGI Greenpac Limited",
@@ -348,6 +348,11 @@
     },
     "AGIIL": {
       "name": "Agi Infra Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
+    "AGRITECH": {
+      "name": "Agri-Tech (India) Limited",
       "isin": "",
       "sector": "DEFAULT"
     },
@@ -379,12 +384,12 @@
     "AIAENG": {
       "name": "AIA Engineering Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "AIIL": {
       "name": "Authum Investment & Infrastructure Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "AIRAN": {
       "name": "Airan Limited",
@@ -449,12 +454,12 @@
     "AKUMS": {
       "name": "Akums Drugs and Pharmaceuticals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "AKZOINDIA": {
       "name": "Akzo Nobel India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ALANKIT": {
       "name": "Alankit Limited",
@@ -494,12 +499,12 @@
     "ALKEM": {
       "name": "Alkem Laboratories Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "ALKYLAMINE": {
       "name": "Alkyl Amines Chemicals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ALLCARGO": {
       "name": "Allcargo Logistics Limited",
@@ -524,7 +529,7 @@
     "ALOKINDS": {
       "name": "Alok Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ALPA": {
       "name": "Alpa Laboratories Limited",
@@ -594,7 +599,7 @@
     "ANANTRAJ": {
       "name": "Anant Raj Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "REALTY"
     },
     "ANDHRAPAP": {
       "name": "ANDHRA PAPER LIMITED",
@@ -654,7 +659,7 @@
     "APARINDS": {
       "name": "Apar Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "APCL": {
       "name": "Anjani Portland Cement Limited",
@@ -674,12 +679,12 @@
     "APLAPOLLO": {
       "name": "APL Apollo Tubes Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "METAL"
     },
     "APLLTD": {
       "name": "Alembic Pharmaceuticals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "APOLLO": {
       "name": "Apollo Micro Systems Limited",
@@ -689,7 +694,7 @@
     "APOLLOHOSP": {
       "name": "Apollo Hospitals Enterprise Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "INFRA"
     },
     "APOLLOPIPE": {
       "name": "Apollo Pipes Limited",
@@ -699,7 +704,7 @@
     "APOLLOTYRE": {
       "name": "Apollo Tyres Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "APOLSINHOT": {
       "name": "Apollo Sindoori Hotels Limited",
@@ -819,7 +824,7 @@
     "ASAHIINDIA": {
       "name": "Asahi India Glass Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ASAHISONG": {
       "name": "Asahi Songwon Colors Limited",
@@ -864,7 +869,7 @@
     "ASHOKLEY": {
       "name": "Ashok Leyland Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "ASIANENE": {
       "name": "Asian Energy Services Limited",
@@ -924,7 +929,7 @@
     "ASTRAZEN": {
       "name": "AstraZeneca Pharma India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ASTRON": {
       "name": "Astron Paper & Board Mill Limited",
@@ -944,12 +949,12 @@
     "ATGL": {
       "name": "Adani Total Gas Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "ATHERENERG": {
       "name": "Ather Energy Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ATL": {
       "name": "Allcargo Terminals Limited",
@@ -984,7 +989,12 @@
     "AUBANK": {
       "name": "AU Small Finance Bank Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
+    },
+    "AURIGROW": {
+      "name": "Auri Grow India Limited",
+      "isin": "",
+      "sector": "DEFAULT"
     },
     "AURIONPRO": {
       "name": "Aurionpro Solutions Limited",
@@ -994,7 +1004,7 @@
     "AUROPHARMA": {
       "name": "Aurobindo Pharma Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "AURUM": {
       "name": "Aurum PropTech Limited",
@@ -1069,12 +1079,12 @@
     "AWL": {
       "name": "AWL Agri Business Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "AXISBANK": {
       "name": "Axis Bank Limited",
       "isin": "",
-      "sector": "FINANCIAL"
+      "sector": "BANKING"
     },
     "AXISCADES": {
       "name": "AXISCADES Technologies Limited",
@@ -1114,7 +1124,7 @@
     "BAJAJ-AUTO": {
       "name": "Bajaj Auto Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "AUTO"
     },
     "BAJAJCON": {
       "name": "Bajaj Consumer Care Limited",
@@ -1194,7 +1204,7 @@
     "BALKRISIND": {
       "name": "Balkrishna Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "BALMLAWRIE": {
       "name": "Balmer Lawrie & Company Limited",
@@ -1209,7 +1219,7 @@
     "BALRAMCHIN": {
       "name": "Balrampur Chini Mills Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BALUFORGE": {
       "name": "Balu Forge Industries Limited",
@@ -1234,7 +1244,7 @@
     "BANDHANBNK": {
       "name": "Bandhan Bank Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PRIVATE_BANK"
     },
     "BANG": {
       "name": "Bang Overseas Limited",
@@ -1249,12 +1259,12 @@
     "BANKBARODA": {
       "name": "Bank of Baroda",
       "isin": "",
-      "sector": "PSU_BANK"
+      "sector": "BANKING"
     },
     "BANKINDIA": {
       "name": "Bank of India",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PSU_BANK"
     },
     "BANSALWIRE": {
       "name": "Bansal Wire Industries Limited",
@@ -1269,7 +1279,7 @@
     "BASF": {
       "name": "BASF India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BASML": {
       "name": "Bannari Amman Spinning Mills Limited",
@@ -1279,12 +1289,12 @@
     "BATAINDIA": {
       "name": "Bata India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BAYERCROP": {
       "name": "Bayer Cropscience Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BBL": {
       "name": "Bharat Bijlee Limited",
@@ -1299,7 +1309,7 @@
     "BBTC": {
       "name": "The Bombay Burmah Trading Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BBTCL": {
       "name": "B&B Triplewall Containers Limited",
@@ -1359,7 +1369,7 @@
     "BERGEPAINT": {
       "name": "Berger Paints (I) Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "BETA": {
       "name": "Beta Drugs Limited",
@@ -1399,7 +1409,7 @@
     "BHARATFORG": {
       "name": "Bharat Forge Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "BHARATGEAR": {
       "name": "Bharat Gears Limited",
@@ -1424,7 +1434,7 @@
     "BHARTIARTL": {
       "name": "Bharti Airtel Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "INFRA"
     },
     "BHARTIHEXA": {
       "name": "Bharti Hexacom Limited",
@@ -1434,7 +1444,7 @@
     "BHEL": {
       "name": "Bharat Heavy Electricals Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "BIGBLOC": {
       "name": "Bigbloc Construction Limited",
@@ -1444,7 +1454,7 @@
     "BIKAJI": {
       "name": "Bikaji Foods International Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BIL": {
       "name": "Bhartiya International Limited",
@@ -1454,7 +1464,7 @@
     "BIOCON": {
       "name": "Biocon Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "BIOFILCHEM": {
       "name": "Biofil Chemicals & Pharmaceuticals Limited",
@@ -1519,12 +1529,12 @@
     "BLUEDART": {
       "name": "Blue Dart Express Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BLUEJET": {
       "name": "Blue Jet Healthcare Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BLUESTARCO": {
       "name": "Blue Star Limited",
@@ -1584,7 +1594,7 @@
     "BPCL": {
       "name": "Bharat Petroleum Corporation Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "BPL": {
       "name": "BPL Limited",
@@ -1594,7 +1604,7 @@
     "BRIGADE": {
       "name": "Brigade Enterprises Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "REALTY"
     },
     "BRIGHOTEL": {
       "name": "Brigade Hotel Ventures Limited",
@@ -1604,7 +1614,7 @@
     "BRITANNIA": {
       "name": "Britannia Industries Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "BRNL": {
       "name": "Bharat Road Network Limited",
@@ -1619,7 +1629,7 @@
     "BSE": {
       "name": "BSE Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FINANCIAL"
     },
     "BSHSL": {
       "name": "Bombay Super Hybrid Seeds Limited",
@@ -1634,7 +1644,7 @@
     "BSOFT": {
       "name": "BIRLASOFT LIMITED",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "BTML": {
       "name": "Bodhi Tree Multimedia Limited",
@@ -1674,7 +1684,7 @@
     "CAMPUS": {
       "name": "Campus Activewear Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CAMS": {
       "name": "Computer Age Management Services Limited",
@@ -1684,12 +1694,12 @@
     "CANBK": {
       "name": "Canara Bank",
       "isin": "",
-      "sector": "PSU_BANK"
+      "sector": "BANKING"
     },
     "CANFINHOME": {
       "name": "Can Fin Homes Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CANHLIFE": {
       "name": "Canara HSBC Life Insurance Company Limited",
@@ -1719,12 +1729,12 @@
     "CAPLIPOINT": {
       "name": "Caplin Point Laboratories Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CARBORUNIV": {
       "name": "Carborundum Universal Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CARERATING": {
       "name": "CARE Ratings Limited",
@@ -1749,7 +1759,7 @@
     "CASTROLIND": {
       "name": "Castrol India Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "CCAVENUE": {
       "name": "AvenuesAI Limited",
@@ -1769,7 +1779,7 @@
     "CCL": {
       "name": "CCL Products (India) Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CDSL": {
       "name": "Central Depository Services (India) Limited",
@@ -1779,7 +1789,7 @@
     "CEATLTD": {
       "name": "CEAT Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CEIGALL": {
       "name": "Ceigall India Limited",
@@ -1834,17 +1844,17 @@
     "CENTURYPLY": {
       "name": "Century Plyboards (India) Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CERA": {
       "name": "Cera Sanitaryware Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CESC": {
       "name": "CESC Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "CEWATER": {
       "name": "Concord Enviro Systems Limited",
@@ -1859,12 +1869,12 @@
     "CGPOWER": {
       "name": "CG Power and Industrial Solutions Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "CHALET": {
       "name": "Chalet Hotels Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CHAMBLFERT": {
       "name": "Chambal Fertilizers & Chemicals Limited",
@@ -1899,7 +1909,7 @@
     "CHENNPETRO": {
       "name": "Chennai Petroleum Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CHEVIOT": {
       "name": "Cheviot Company Limited",
@@ -1909,7 +1919,7 @@
     "CHOICEIN": {
       "name": "Choice International Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CHOLAFIN": {
       "name": "Cholamandalam Investment and Finance Company Limited",
@@ -1949,12 +1959,12 @@
     "CIPLA": {
       "name": "Cipla Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "CLEAN": {
       "name": "Clean Science and Technology Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CLEANMAX": {
       "name": "Clean Max Enviro Energy Solutions Limited",
@@ -1999,17 +2009,17 @@
     "COFORGE": {
       "name": "Coforge Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "IT"
     },
     "COHANCE": {
       "name": "Cohance Lifesciences Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "COLPAL": {
       "name": "Colgate Palmolive (India) Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FMCG"
     },
     "COMPUSOFT": {
       "name": "Compucom Software Limited",
@@ -2029,7 +2039,7 @@
     "CONCORDBIO": {
       "name": "Concord Biotech Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CONFIPET": {
       "name": "Confidence Petroleum India Limited",
@@ -2089,7 +2099,7 @@
     "CRAFTSMAN": {
       "name": "Craftsman Automation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CRAMC": {
       "name": "Canara Robeco Asset Management Company Limited",
@@ -2114,7 +2124,7 @@
     "CRISIL": {
       "name": "CRISIL Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "CRIZAC": {
       "name": "Crizac Limited",
@@ -2149,7 +2159,7 @@
     "CUB": {
       "name": "City Union Bank Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "CUBEXTUB": {
       "name": "Cubex Tubings Limited",
@@ -2159,7 +2169,7 @@
     "CUMMINSIND": {
       "name": "Cummins India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "INFRA"
     },
     "CUPID": {
       "name": "Cupid Limited",
@@ -2189,12 +2199,12 @@
     "DABUR": {
       "name": "Dabur India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FMCG"
     },
     "DALBHARAT": {
       "name": "Dalmia Bharat Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "DALMIASUG": {
       "name": "Dalmia Bharat Sugar and Industries Limited",
@@ -2254,7 +2264,7 @@
     "DBREALTY": {
       "name": "Valor Estate Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "DBSTOCKBRO": {
       "name": "DB (International) Stock Brokers Limited",
@@ -2289,7 +2299,7 @@
     "DCMSHRIRAM": {
       "name": "DCM Shriram Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "DCMSRIND": {
       "name": "DCM Shriram Industries Limited",
@@ -2329,7 +2339,7 @@
     "DEEPAKNTR": {
       "name": "Deepak Nitrite Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "DEEPINDS": {
       "name": "Deep Industries Limited",
@@ -2479,17 +2489,17 @@
     "DIVISLAB": {
       "name": "Divi's Laboratories Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "DIXON": {
       "name": "Dixon Technologies (India) Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "CONSUMER"
     },
     "DLF": {
       "name": "DLF Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "REALTY"
     },
     "DLINKINDIA": {
       "name": "D-Link (India) Limited",
@@ -2534,7 +2544,7 @@
     "DOMS": {
       "name": "DOMS Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "DONEAR": {
       "name": "Donear Industries Limited",
@@ -2574,7 +2584,7 @@
     "DRREDDY": {
       "name": "Dr. Reddy's Laboratories Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "DSFCL": {
       "name": "DCM Shriram Fine Chemicals Limited",
@@ -2634,7 +2644,7 @@
     "ECLERX": {
       "name": "eClerx Services Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ECOSMOBLTY": {
       "name": "Ecos (India) Mobility & Hospitality Limited",
@@ -2654,12 +2664,12 @@
     "EICHERMOT": {
       "name": "Eicher Motors Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "AUTO"
     },
     "EIDPARRY": {
       "name": "EID Parry India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "EIEL": {
       "name": "Enviro Infra Engineers Limited",
@@ -2679,7 +2689,7 @@
     "EIHOTEL": {
       "name": "EIH Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "EIMCOELECO": {
       "name": "Eimco Elecon (India) Limited",
@@ -2699,7 +2709,7 @@
     "ELECON": {
       "name": "Elecon Engineering Company Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ELECTCAST": {
       "name": "Electrosteel Castings Limited",
@@ -2714,7 +2724,7 @@
     "ELGIEQUIP": {
       "name": "Elgi Equipments Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ELGIRUBCO": {
       "name": "Elgi Rubber Company Limited",
@@ -2749,7 +2759,7 @@
     "EMCURE": {
       "name": "Emcure Pharmaceuticals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "EMIL": {
       "name": "Electronics Mart India Limited",
@@ -2784,7 +2794,7 @@
     "ENDURANCE": {
       "name": "Endurance Technologies Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "ENERGYDEV": {
       "name": "Energy Development Company Limited",
@@ -2794,7 +2804,7 @@
     "ENGINERSIN": {
       "name": "Engineers India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ENIL": {
       "name": "Entertainment Network (India) Limited",
@@ -2839,7 +2849,7 @@
     "ERIS": {
       "name": "Eris Lifesciences Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ESABINDIA": {
       "name": "Esab India Limited",
@@ -2854,7 +2864,7 @@
     "ESCORTS": {
       "name": "Escorts Kubota Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "ESSARSHPNG": {
       "name": "Essar Shipping Limited",
@@ -2934,7 +2944,7 @@
     "EXIDEIND": {
       "name": "Exide Industries Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "EXPLEOSOL": {
       "name": "Expleo Solutions Limited",
@@ -2954,7 +2964,7 @@
     "FACT": {
       "name": "Fertilizers and Chemicals Travancore Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "FAIRCHEMOR": {
       "name": "Fairchem Organics Limited",
@@ -2979,7 +2989,7 @@
     "FEDERALBNK": {
       "name": "The Federal Bank  Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
     },
     "FEDFINA": {
       "name": "Fedbank Financial Services Limited",
@@ -3004,7 +3014,7 @@
     "FINCABLES": {
       "name": "Finolex Cables Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "FINEORG": {
       "name": "Fine Organic Industries Limited",
@@ -3024,7 +3034,7 @@
     "FINPIPE": {
       "name": "Finolex Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "FIRSTCRY": {
       "name": "Brainbees Solutions Limited",
@@ -3054,7 +3064,7 @@
     "FLUOROCHEM": {
       "name": "Gujarat Fluorochemicals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "FMGOETZE": {
       "name": "Federal-Mogul Goetze (India) Limited.",
@@ -3079,12 +3089,12 @@
     "FORCEMOT": {
       "name": "FORCE MOTORS LTD",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "FORTIS": {
       "name": "Fortis Healthcare Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "HEALTHCARE"
     },
     "FOSECOIND": {
       "name": "Foseco India Limited",
@@ -3119,7 +3129,7 @@
     "GAIL": {
       "name": "GAIL (India) Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "GALAPREC": {
       "name": "Gala Precision Engineering Limited",
@@ -3271,10 +3281,15 @@
       "isin": "",
       "sector": "DEFAULT"
     },
+    "GICL": {
+      "name": "Globe International Carriers Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
     "GICRE": {
       "name": "General Insurance Corporation of India",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "GILLANDERS": {
       "name": "Gillanders Arbuthnot & Company Limited",
@@ -3314,17 +3329,17 @@
     "GLAND": {
       "name": "Gland Pharma Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PHARMA"
     },
     "GLAXO": {
       "name": "GlaxoSmithKline Pharmaceuticals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "GLENMARK": {
       "name": "Glenmark Pharmaceuticals Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "GLOBAL": {
       "name": "Global Education Limited",
@@ -3374,7 +3389,7 @@
     "GMDCLTD": {
       "name": "Gujarat Mineral Development Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GMMPFAUDLR": {
       "name": "GMM Pfaudler Limited",
@@ -3434,22 +3449,22 @@
     "GODREJAGRO": {
       "name": "Godrej Agrovet Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GODREJCP": {
       "name": "Godrej Consumer Products Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "GODREJIND": {
       "name": "Godrej Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "GODREJPROP": {
       "name": "Godrej Properties Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "REALTY"
     },
     "GOKEX": {
       "name": "Gokaldas Exports Limited",
@@ -3489,7 +3504,7 @@
     "GPIL": {
       "name": "Godawari Power And Ispat limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GPPL": {
       "name": "Gujarat Pipavav Port Limited",
@@ -3509,12 +3524,12 @@
     "GRANULES": {
       "name": "Granules India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GRAPHITE": {
       "name": "Graphite India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GRASIM": {
       "name": "Grasim Industries Limited",
@@ -3524,7 +3539,7 @@
     "GRAVITA": {
       "name": "Gravita India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "GREAVESCOT": {
       "name": "Greaves Cotton Limited",
@@ -3598,6 +3613,11 @@
     },
     "GSLSU": {
       "name": "Global Surfaces Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
+    "GSPCROP": {
+      "name": "GSP Crop Science Limited",
       "isin": "",
       "sector": "DEFAULT"
     },
@@ -3704,7 +3724,7 @@
     "HAPPSTMNDS": {
       "name": "Happiest Minds Technologies Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "HAPPYFORGE": {
       "name": "Happy Forgings Limited",
@@ -3789,7 +3809,7 @@
     "HDFCBANK": {
       "name": "HDFC Bank Limited",
       "isin": "",
-      "sector": "FINANCIAL"
+      "sector": "BANKING"
     },
     "HDFCLIFE": {
       "name": "HDFC Life Insurance Company Limited",
@@ -3809,7 +3829,7 @@
     "HEG": {
       "name": "HEG Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "HEIDELBERG": {
       "name": "HeidelbergCement India Limited",
@@ -3834,7 +3854,7 @@
     "HEROMOTOCO": {
       "name": "Hero MotoCorp Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "HESTERBIO": {
       "name": "Hester Biosciences Limited",
@@ -3849,12 +3869,12 @@
     "HEXT": {
       "name": "Hexaware Technologies Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "HFCL": {
       "name": "HFCL Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "HGINFRA": {
       "name": "H.G. Infra Engineering Limited",
@@ -3909,7 +3929,7 @@
     "HINDCOPPER": {
       "name": "Hindustan Copper Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "METAL"
     },
     "HINDOILEXP": {
       "name": "Hindustan Oil Exploration Company Limited",
@@ -3919,12 +3939,12 @@
     "HINDPETRO": {
       "name": "Hindustan Petroleum Corporation Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "HINDUNILVR": {
       "name": "Hindustan Unilever Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "HINDWAREAP": {
       "name": "Hindware Home Innovation Limited",
@@ -3984,17 +4004,17 @@
     "HOMEFIRST": {
       "name": "Home First Finance Company India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "HONASA": {
       "name": "Honasa Consumer Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "HONAUT": {
       "name": "Honeywell Automation India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "HONDAPOWER": {
       "name": "Honda India Power Products Limited",
@@ -4069,7 +4089,7 @@
     "ICICIBANK": {
       "name": "ICICI Bank Limited",
       "isin": "",
-      "sector": "FINANCIAL"
+      "sector": "BANKING"
     },
     "ICICIGI": {
       "name": "ICICI Lombard General Insurance Company Limited",
@@ -4094,7 +4114,7 @@
     "IDBI": {
       "name": "IDBI Bank Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "IDEA": {
       "name": "Vodafone Idea Limited",
@@ -4109,7 +4129,7 @@
     "IDFCFIRSTB": {
       "name": "IDFC First Bank Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
     },
     "IEX": {
       "name": "Indian Energy Exchange Limited",
@@ -4154,7 +4174,7 @@
     "IGL": {
       "name": "Indraprastha Gas Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "IGPL": {
       "name": "IG Petrochemicals Limited",
@@ -4219,17 +4239,17 @@
     "INDGN": {
       "name": "Indegene Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "INDHOTEL": {
       "name": "The Indian Hotels Company Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "INFRA"
     },
     "INDIACEM": {
       "name": "The India Cements Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "INDIAGLYCO": {
       "name": "India Glycols Limited",
@@ -4239,12 +4259,12 @@
     "INDIAMART": {
       "name": "Indiamart Intermesh Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "INDIANB": {
       "name": "Indian Bank",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PSU_BANK"
     },
     "INDIANCARD": {
       "name": "Indian Card Clothing Company Limited",
@@ -4264,7 +4284,7 @@
     "INDIGO": {
       "name": "InterGlobe Aviation Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "INFRA"
     },
     "INDIGOPNTS": {
       "name": "Indigo Paints Limited",
@@ -4349,12 +4369,12 @@
     "INDUSINDBK": {
       "name": "IndusInd Bank Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
     },
     "INDUSTOWER": {
       "name": "Indus Towers Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "INFRA"
     },
     "INFOBEAN": {
       "name": "InfoBeans Technologies Limited",
@@ -4386,6 +4406,11 @@
       "isin": "",
       "sector": "DEFAULT"
     },
+    "INNOVISION": {
+      "name": "Innovision Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
     "INOXGREEN": {
       "name": "Inox Green Energy Services Limited",
       "isin": "",
@@ -4394,12 +4419,12 @@
     "INOXINDIA": {
       "name": "INOX India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "INOXWIND": {
       "name": "Inox Wind Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "INSECTICID": {
       "name": "Insecticides (India) Limited",
@@ -4409,7 +4434,7 @@
     "INTELLECT": {
       "name": "Intellect Design Arena Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "INTENTECH": {
       "name": "Intense Technologies Limited",
@@ -4439,7 +4464,7 @@
     "IOC": {
       "name": "Indian Oil Corporation Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "IOLCP": {
       "name": "IOL Chemicals and Pharmaceuticals Limited",
@@ -4454,7 +4479,7 @@
     "IPCALAB": {
       "name": "IPCA Laboratories Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "IPL": {
       "name": "India Pesticides Limited",
@@ -4519,7 +4544,7 @@
     "ITC": {
       "name": "ITC Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "ITCHOTELS": {
       "name": "ITC Hotels Limited",
@@ -4534,7 +4559,7 @@
     "ITI": {
       "name": "ITI Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "IVALUE": {
       "name": "Ivalue Infosolutions Limited",
@@ -4559,7 +4584,7 @@
     "J&KBANK": {
       "name": "The Jammu & Kashmir Bank Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JAGRAN": {
       "name": "Jagran Prakashan Limited",
@@ -4634,7 +4659,7 @@
     "JBCHEPHARM": {
       "name": "JB Chemicals & Pharmaceuticals Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PHARMA"
     },
     "JBMA": {
       "name": "JBM Auto Limited",
@@ -4704,7 +4729,7 @@
     "JKCEMENT": {
       "name": "JK Cement Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "JKIL": {
       "name": "J.Kumar Infraprojects Limited",
@@ -4729,7 +4754,7 @@
     "JKTYRE": {
       "name": "JK Tyre & Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JLHL": {
       "name": "Jupiter Life Line Hospitals Limited",
@@ -4744,7 +4769,7 @@
     "JMFINANCIL": {
       "name": "JM Financial Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JNKINDIA": {
       "name": "JNK India Limited",
@@ -4784,7 +4809,7 @@
     "JSWCEMENT": {
       "name": "JSW Cement Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JSWENERGY": {
       "name": "JSW Energy Limited",
@@ -4799,7 +4824,7 @@
     "JSWINFRA": {
       "name": "JSW Infrastructure Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "JSWSTEEL": {
       "name": "JSW Steel Limited",
@@ -4829,12 +4854,12 @@
     "JUBLINGREA": {
       "name": "Jubilant Ingrevia Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JUBLPHARMA": {
       "name": "Jubilant Pharmova Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JUNIPER": {
       "name": "Juniper Hotels Limited",
@@ -4854,7 +4879,7 @@
     "JYOTHYLAB": {
       "name": "Jyothy Labs Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "JYOTICNC": {
       "name": "Jyoti CNC Automation Limited",
@@ -5006,6 +5031,11 @@
       "isin": "",
       "sector": "DEFAULT"
     },
+    "KESORAMIND": {
+      "name": "Kesoram Industries Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
     "KEYFINSERV": {
       "name": "Keynote Financial Services Limited",
       "isin": "",
@@ -5049,7 +5079,7 @@
     "KIMS": {
       "name": "Krishna Institute of Medical Sciences Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "KINGFA": {
       "name": "Kingfa Science & Technology (India) Limited",
@@ -5069,12 +5099,12 @@
     "KIRLOSBROS": {
       "name": "Kirloskar Brothers Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "KIRLOSENG": {
       "name": "Kirloskar Oil Engines Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "KIRLOSIND": {
       "name": "Kirloskar Industries Limited",
@@ -5139,7 +5169,7 @@
     "KOTAKBANK": {
       "name": "Kotak Mahindra Bank Limited",
       "isin": "",
-      "sector": "FINANCIAL"
+      "sector": "BANKING"
     },
     "KOTARISUG": {
       "name": "Kothari Sugars And Chemicals Limited",
@@ -5184,7 +5214,7 @@
     "KPRMILL": {
       "name": "K.P.R. Mill Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "KRBL": {
       "name": "KRBL Limited",
@@ -5259,7 +5289,7 @@
     "KSB": {
       "name": "Ksb Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "KSCL": {
       "name": "Kaveri Seed Company Limited",
@@ -5334,7 +5364,7 @@
     "LATENTVIEW": {
       "name": "Latent View Analytics Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "LATTEYS": {
       "name": "Latteys Industries Limited",
@@ -5344,7 +5374,7 @@
     "LAURUSLABS": {
       "name": "Laurus Labs Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PHARMA"
     },
     "LAXMIDENTL": {
       "name": "Laxmi Dental Limited",
@@ -5364,7 +5394,7 @@
     "LEMONTREE": {
       "name": "Lemon Tree Hotels Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "LENSKART": {
       "name": "Lenskart Solutions Limited",
@@ -5404,7 +5434,7 @@
     "LICHSGFIN": {
       "name": "LIC Housing Finance Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FINANCIAL"
     },
     "LICI": {
       "name": "Life Insurance Corporation Of India",
@@ -5429,7 +5459,7 @@
     "LINDEINDIA": {
       "name": "Linde India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "LLOYDSENGG": {
       "name": "LLOYDS ENGINEERING WORKS LIMITED",
@@ -5499,7 +5529,7 @@
     "LTFOODS": {
       "name": "LT Foods Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "LTM": {
       "name": "LTIMindtree Limited",
@@ -5509,7 +5539,7 @@
     "LTTS": {
       "name": "L&T Technology Services Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "LUMAXIND": {
       "name": "Lumax Industries Limited",
@@ -5524,7 +5554,7 @@
     "LUPIN": {
       "name": "Lupin Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "LUXIND": {
       "name": "Lux Industries Limited",
@@ -5549,7 +5579,7 @@
     "M&M": {
       "name": "Mahindra & Mahindra Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "AUTO"
     },
     "M&MFIN": {
       "name": "Mahindra & Mahindra Financial Services Limited",
@@ -5619,12 +5649,12 @@
     "MAHSCOOTER": {
       "name": "Maharashtra Scooters Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MAHSEAMLES": {
       "name": "Maharashtra Seamless Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MAITHANALL": {
       "name": "Maithan Alloys Limited",
@@ -5699,7 +5729,7 @@
     "MANKIND": {
       "name": "Mankind Pharma Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "PHARMA"
     },
     "MANOMAY": {
       "name": "Manomay Tex India Limited",
@@ -5724,12 +5754,12 @@
     "MANYAVAR": {
       "name": "Vedant Fashions Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MAPMYINDIA": {
       "name": "C.E. Info Systems Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MARALOVER": {
       "name": "Maral Overseas Limited",
@@ -5744,7 +5774,7 @@
     "MARICO": {
       "name": "Marico Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FMCG"
     },
     "MARINE": {
       "name": "Marine Electricals (India) Limited",
@@ -5769,7 +5799,7 @@
     "MARUTI": {
       "name": "Maruti Suzuki India Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "AUTO"
     },
     "MASFIN": {
       "name": "MAS Financial Services Limited",
@@ -5809,7 +5839,7 @@
     "MAXHEALTH": {
       "name": "Max Healthcare Institute Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "INFRA"
     },
     "MAXIND": {
       "name": "Max India Limited",
@@ -5864,7 +5894,7 @@
     "MEDANTA": {
       "name": "Global Health Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "MEDIASSIST": {
       "name": "Medi Assist Healthcare Services Limited",
@@ -5914,7 +5944,7 @@
     "METROPOLIS": {
       "name": "Metropolis Healthcare Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MFML": {
       "name": "Mahalaxmi Fabric Mills Limited",
@@ -5934,7 +5964,7 @@
     "MGL": {
       "name": "Mahanagar Gas Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "MHLXMIRU": {
       "name": "Mahalaxmi Rubtech Limited",
@@ -5964,7 +5994,7 @@
     "MINDACORP": {
       "name": "Minda Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MINDTECK": {
       "name": "Mindteck (India) Limited",
@@ -6009,7 +6039,7 @@
     "MMTC": {
       "name": "MMTC Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MOBIKWIK": {
       "name": "One Mobikwik Systems Limited",
@@ -6099,7 +6129,7 @@
     "MOTHERSON": {
       "name": "Samvardhana Motherson International Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "AUTO"
     },
     "MOTILALOFS": {
       "name": "Motilal Oswal Financial Services Limited",
@@ -6119,7 +6149,7 @@
     "MPHASIS": {
       "name": "MphasiS Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "IT"
     },
     "MPSLTD": {
       "name": "MPS Limited",
@@ -6149,7 +6179,7 @@
     "MSUMI": {
       "name": "Motherson Sumi Wiring India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "MTARTECH": {
       "name": "Mtar Technologies Limited",
@@ -6209,7 +6239,7 @@
     "MUTHOOTFIN": {
       "name": "Muthoot Finance Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FINANCIAL"
     },
     "MUTHOOTMF": {
       "name": "Muthoot Microfin Limited",
@@ -6269,7 +6299,7 @@
     "NAM-INDIA": {
       "name": "Nippon Life India Asset Management Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "NARMADA": {
       "name": "Narmada Agrobase Limited",
@@ -6294,7 +6324,7 @@
     "NATIONALUM": {
       "name": "National Aluminium Company Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "METAL"
     },
     "NAUKRI": {
       "name": "Info Edge (India) Limited",
@@ -6304,7 +6334,7 @@
     "NAVA": {
       "name": "NAVA LIMITED",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "NAVINFLUOR": {
       "name": "Navin Fluorine International Limited",
@@ -6414,12 +6444,12 @@
     "NESTLEIND": {
       "name": "Nestle India Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "NETWEB": {
       "name": "Netweb Technologies India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "NETWORK18": {
       "name": "Network18 Media & Investments Limited",
@@ -6464,12 +6494,12 @@
     "NHPC": {
       "name": "NHPC Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "NIACL": {
       "name": "The New India Assurance Company Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "NIBE": {
       "name": "NIBE Limited",
@@ -6539,7 +6569,7 @@
     "NIVABUPA": {
       "name": "Niva Bupa Health Insurance Company Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "NKIND": {
       "name": "NK Industries Limited",
@@ -6554,7 +6584,7 @@
     "NMDC": {
       "name": "NMDC Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "METAL"
     },
     "NOCIL": {
       "name": "NOCIL Limited",
@@ -6604,12 +6634,12 @@
     "NSLNISP": {
       "name": "NMDC Steel Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "NTPC": {
       "name": "NTPC Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "NTPCGREEN": {
       "name": "NTPC Green Energy Limited",
@@ -6634,7 +6664,7 @@
     "NUVOCO": {
       "name": "Nuvoco Vistas Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "NYKAA": {
       "name": "FSN E-Commerce Ventures Limited",
@@ -6654,7 +6684,7 @@
     "OBEROIRLTY": {
       "name": "Oberoi Realty Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "REALTY"
     },
     "OCCLLTD": {
       "name": "OCCL Limited",
@@ -6669,12 +6699,12 @@
     "OFSS": {
       "name": "Oracle Financial Services Software Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "IT"
     },
     "OIL": {
       "name": "Oil India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "OILCOUNTUB": {
       "name": "Oil Country Tubular Limited",
@@ -6689,7 +6719,7 @@
     "OLECTRA": {
       "name": "Olectra Greentech Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "OMAXAUTO": {
       "name": "Omax Autos Limited",
@@ -6729,12 +6759,12 @@
     "ONESOURCE": {
       "name": "Onesource Specialty Pharma Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ONGC": {
       "name": "Oil & Natural Gas Corporation Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "ONMOBILE": {
       "name": "OnMobile Global Limited",
@@ -6949,7 +6979,7 @@
     "PATANJALI": {
       "name": "Patanjali Foods Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FMCG"
     },
     "PATELENG": {
       "name": "Patel Engineering Limited",
@@ -7019,7 +7049,7 @@
     "PERSISTENT": {
       "name": "Persistent Systems Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "IT"
     },
     "PETRONET": {
       "name": "Petronet LNG Limited",
@@ -7034,7 +7064,7 @@
     "PFIZER": {
       "name": "Pfizer Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "PFOCUS": {
       "name": "Prime Focus Limited",
@@ -7054,7 +7084,7 @@
     "PGHH": {
       "name": "Procter & Gamble Hygiene and Health Care Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "PGHL": {
       "name": "Procter & Gamble Health Limited",
@@ -7069,7 +7099,7 @@
     "PHOENIXLTD": {
       "name": "The Phoenix Mills Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "REALTY"
     },
     "PICCADIL": {
       "name": "Piccadily Agro Industries Limited",
@@ -7149,7 +7179,7 @@
     "PNB": {
       "name": "Punjab National Bank",
       "isin": "",
-      "sector": "PSU_BANK"
+      "sector": "BANKING"
     },
     "PNBGILTS": {
       "name": "PNB Gilts Limited",
@@ -7209,7 +7239,7 @@
     "POLYMED": {
       "name": "Poly Medicure Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "POLYPLEX": {
       "name": "Polyplex Corporation Limited",
@@ -7229,12 +7259,12 @@
     "POWERGRID": {
       "name": "Power Grid Corporation of India Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "POWERINDIA": {
       "name": "Hitachi Energy India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "POWERMECH": {
       "name": "Power Mech Projects Limited",
@@ -7254,7 +7284,7 @@
     "PPLPHARMA": {
       "name": "Piramal Pharma Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PHARMA"
     },
     "PRABHA": {
       "name": "Prabha Energy Limited",
@@ -7269,7 +7299,7 @@
     "PRAJIND": {
       "name": "Praj Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "PRAKASH": {
       "name": "Prakash Industries Limited",
@@ -7314,7 +7344,7 @@
     "PRESTIGE": {
       "name": "Prestige Estates Projects Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "REALTY"
     },
     "PRICOLLTD": {
       "name": "Pricol Limited",
@@ -7399,7 +7429,7 @@
     "PTCIL": {
       "name": "PTC Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "PTL": {
       "name": "PTL Enterprises Limited",
@@ -7489,7 +7519,7 @@
     "RADICO": {
       "name": "Radico Khaitan Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "FMCG"
     },
     "RADIOCITY": {
       "name": "Music Broadcast Limited",
@@ -7499,7 +7529,7 @@
     "RAILTEL": {
       "name": "Railtel Corporation Of India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RAIN": {
       "name": "Rain Industries Limited",
@@ -7509,7 +7539,7 @@
     "RAINBOW": {
       "name": "Rainbow Childrens Medicare Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RAJMET": {
       "name": "Rajnandini Metal Limited",
@@ -7639,7 +7669,7 @@
     "RCF": {
       "name": "Rashtriya Chemicals and Fertilizers Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RECLTD": {
       "name": "REC Limited",
@@ -7689,7 +7719,7 @@
     "RELIANCE": {
       "name": "Reliance Industries Limited",
       "isin": "",
-      "sector": "INFRA"
+      "sector": "ENERGY"
     },
     "RELIGARE": {
       "name": "Religare Enterprises Limited",
@@ -7749,7 +7779,7 @@
     "RHIM": {
       "name": "RHI MAGNESITA INDIA LIMITED",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RHL": {
       "name": "Robust Hotels Limited",
@@ -7779,7 +7809,7 @@
     "RITES": {
       "name": "RITES Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RKDL": {
       "name": "Ravi Kumar Distilleries Limited",
@@ -7794,7 +7824,7 @@
     "RKFORGE": {
       "name": "Ramkrishna Forgings Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RKSWAMY": {
       "name": "R K Swamy Limited",
@@ -7864,7 +7894,7 @@
     "RPOWER": {
       "name": "Reliance Power Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "ENERGY"
     },
     "RPPINFRA": {
       "name": "R.P.P. Infra Projects Limited",
@@ -7889,7 +7919,7 @@
     "RRKABEL": {
       "name": "R R Kabel Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "RSL": {
       "name": "Rajputana Stainless Limited",
@@ -8024,12 +8054,12 @@
     "SAIL": {
       "name": "Steel Authority of India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "METAL"
     },
     "SAILIFE": {
       "name": "Sai Life Sciences Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SAKAR": {
       "name": "Sakar Healthcare Limited",
@@ -8084,7 +8114,7 @@
     "SAMMAANCAP": {
       "name": "Sammaan Capital Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SAMPANN": {
       "name": "Sampann Utpadan India Limited",
@@ -8149,12 +8179,12 @@
     "SAPPHIRE": {
       "name": "Sapphire Foods India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SARDAEN": {
       "name": "Sarda Energy & Minerals Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SAREGAMA": {
       "name": "Saregama India Limited",
@@ -8209,7 +8239,7 @@
     "SBFC": {
       "name": "SBFC Finance Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SBGLP": {
       "name": "Suratwwala Business Group Limited",
@@ -8219,7 +8249,7 @@
     "SBICARD": {
       "name": "SBI Cards and Payment Services Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "FINANCIAL"
     },
     "SBILIFE": {
       "name": "SBI Life Insurance Company Limited",
@@ -8229,12 +8259,12 @@
     "SBIN": {
       "name": "State Bank of India",
       "isin": "",
-      "sector": "FINANCIAL"
+      "sector": "BANKING"
     },
     "SCHAEFFLER": {
       "name": "Schaeffler India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "SCHAND": {
       "name": "S Chand And Company Limited",
@@ -8244,7 +8274,7 @@
     "SCI": {
       "name": "Shipping Corporation Of India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SCILAL": {
       "name": "Shipping Corporation of India Land and Assets Limited",
@@ -8388,11 +8418,6 @@
     },
     "SHALPAINTS": {
       "name": "Shalimar Paints Limited",
-      "isin": "",
-      "sector": "DEFAULT"
-    },
-    "SHANKARA": {
-      "name": "Shankara Building Products Limited",
       "isin": "",
       "sector": "DEFAULT"
     },
@@ -8579,7 +8604,7 @@
     "SIGNATURE": {
       "name": "Signatureglobal (India) Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "REALTY"
     },
     "SIGNPOST": {
       "name": "Signpost India Limited",
@@ -8769,7 +8794,7 @@
     "SONACOMS": {
       "name": "Sona BLW Precision Forgings Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "SONAMLTD": {
       "name": "SONAM LIMITED",
@@ -8779,7 +8804,7 @@
     "SONATSOFTW": {
       "name": "Sonata Software Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SOTL": {
       "name": "Savita Oil Technologies Limited",
@@ -9049,7 +9074,7 @@
     "SUMICHEM": {
       "name": "Sumitomo Chemical India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SUMIT": {
       "name": "Sumit Woods Limited",
@@ -9074,7 +9099,7 @@
     "SUNDARMFIN": {
       "name": "Sundaram Finance Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "SUNDRMBRAK": {
       "name": "Sundaram Brake Linings Limited",
@@ -9084,7 +9109,7 @@
     "SUNDRMFAST": {
       "name": "Sundram Fasteners Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SUNDROP": {
       "name": "Sundrop Brands Limited",
@@ -9099,7 +9124,7 @@
     "SUNPHARMA": {
       "name": "Sun Pharmaceutical Industries Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "SUNTECK": {
       "name": "Sunteck Realty Limited",
@@ -9204,7 +9229,7 @@
     "SUZLON": {
       "name": "Suzlon Energy Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "SVLL": {
       "name": "Shree Vasu Logistics Limited",
@@ -9254,7 +9279,7 @@
     "SYRMA": {
       "name": "Syrma SGS Technology Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "SYSTMTXC": {
       "name": "Systematix Corporate Services Limited",
@@ -9299,7 +9324,7 @@
     "TARIL": {
       "name": "Transformers And Rectifiers (India) Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TARSONS": {
       "name": "Tarsons Products Limited",
@@ -9329,7 +9354,7 @@
     "TATACONSUM": {
       "name": "TATA CONSUMER PRODUCTS LIMITED",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "TATAELXSI": {
       "name": "Tata Elxsi Limited",
@@ -9339,12 +9364,12 @@
     "TATAINVEST": {
       "name": "Tata Investment Corporation Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "MIDCAP"
     },
     "TATAPOWER": {
       "name": "Tata Power Company Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "ENERGY"
     },
     "TATASTEEL": {
       "name": "Tata Steel Limited",
@@ -9364,7 +9389,7 @@
     "TBOTEK": {
       "name": "TBO Tek Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TBZ": {
       "name": "Tribhovandas Bhimji Zaveri Limited",
@@ -9419,7 +9444,7 @@
     "TECHNOE": {
       "name": "Techno Electric & Engineering Company Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TECILCHEM": {
       "name": "TECIL Chemicals and Hydro Power Limited",
@@ -9499,7 +9524,7 @@
     "THELEELA": {
       "name": "Leela Palaces Hotels & Resorts Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "THEMISMED": {
       "name": "Themis Medicare Limited",
@@ -9549,7 +9574,7 @@
     "TIINDIA": {
       "name": "Tube Investments of India Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "AUTO"
     },
     "TIL": {
       "name": "TIL Limited",
@@ -9564,7 +9589,7 @@
     "TIMKEN": {
       "name": "Timken India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TINNARUBR": {
       "name": "Tinna Rubber and Infrastructure Limited",
@@ -9586,15 +9611,10 @@
       "isin": "",
       "sector": "DEFAULT"
     },
-    "TIRUPATIFL": {
-      "name": "Tirupati Forge Limited",
-      "isin": "",
-      "sector": "DEFAULT"
-    },
     "TITAGARH": {
       "name": "TITAGARH RAIL SYSTEMS LIMITED",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TITAN": {
       "name": "Titan Company Limited",
@@ -9644,12 +9664,12 @@
     "TORNTPHARM": {
       "name": "Torrent Pharmaceuticals Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "TORNTPOWER": {
       "name": "Torrent Power Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "ENERGY"
     },
     "TOTAL": {
       "name": "Total Transport Systems Limited",
@@ -9729,7 +9749,7 @@
     "TRIVENI": {
       "name": "Triveni Engineering & Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TRU": {
       "name": "TruCap Finance Limited",
@@ -9759,7 +9779,7 @@
     "TTML": {
       "name": "Tata Teleservices (Maharashtra) Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "TVSELECT": {
       "name": "TVS Electronics Limited",
@@ -9774,7 +9794,7 @@
     "TVSMOTOR": {
       "name": "TVS Motor Company Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "AUTO"
     },
     "TVSSRICHAK": {
       "name": "TVS Srichakra Limited",
@@ -9783,6 +9803,11 @@
     },
     "TVTODAY": {
       "name": "TV Today Network Limited",
+      "isin": "",
+      "sector": "DEFAULT"
+    },
+    "TVVISION": {
+      "name": "TV Vision Limited",
       "isin": "",
       "sector": "DEFAULT"
     },
@@ -9889,7 +9914,7 @@
     "UNIONBANK": {
       "name": "Union Bank of India",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
     },
     "UNIPARTS": {
       "name": "Uniparts India Limited",
@@ -9899,7 +9924,7 @@
     "UNITDSPR": {
       "name": "United Spirits Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "UNITECH": {
       "name": "Unitech Limited",
@@ -9954,12 +9979,12 @@
     "USHAMART": {
       "name": "Usha Martin Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "UTIAMC": {
       "name": "UTI Asset Management Company Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "UTKARSHBNK": {
       "name": "Utkarsh Small Finance Bank Limited",
@@ -10039,7 +10064,7 @@
     "VBL": {
       "name": "Varun Beverages Limited",
       "isin": "",
-      "sector": "CONSUMER"
+      "sector": "FMCG"
     },
     "VCL": {
       "name": "Vaxtex Cotfab Limited",
@@ -10064,7 +10089,7 @@
     "VENTIVE": {
       "name": "Ventive Hospitality Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "VENUSPIPES": {
       "name": "Venus Pipes & Tubes Limited",
@@ -10104,7 +10129,7 @@
     "VGUARD": {
       "name": "V-Guard Industries Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "VHL": {
       "name": "Vardhman Holdings Limited",
@@ -10124,7 +10149,7 @@
     "VIJAYA": {
       "name": "Vijaya Diagnostic Centre Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "VIKASECO": {
       "name": "Vikas EcoTech Limited",
@@ -10309,7 +10334,7 @@
     "VTL": {
       "name": "Vardhman Textiles Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "WAAREEENER": {
       "name": "Waaree Energies Limited",
@@ -10364,7 +10389,7 @@
     "WELCORP": {
       "name": "Welspun Corp Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "METAL"
     },
     "WELENT": {
       "name": "Welspun Enterprises Limited",
@@ -10379,7 +10404,7 @@
     "WELSPUNLIV": {
       "name": "Welspun Living Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "WENDT": {
       "name": "Wendt (India) Limited",
@@ -10439,7 +10464,7 @@
     "WOCKPHARMA": {
       "name": "Wockhardt Limited",
       "isin": "",
-      "sector": "SMALLCAP"
+      "sector": "PHARMA"
     },
     "WONDERLA": {
       "name": "Wonderla Holidays Limited",
@@ -10499,7 +10524,7 @@
     "YESBANK": {
       "name": "Yes Bank Limited",
       "isin": "",
-      "sector": "MIDCAP"
+      "sector": "BANKING"
     },
     "YUKEN": {
       "name": "Yuken India Limited",
@@ -10544,7 +10569,7 @@
     "ZFCVINDIA": {
       "name": "ZF Commercial Vehicle Control Systems India Limited",
       "isin": "",
-      "sector": "DEFAULT"
+      "sector": "SMALLCAP"
     },
     "ZIMLAB": {
       "name": "Zim Laboratories Limited",
@@ -10579,7 +10604,7 @@
     "ZYDUSLIFE": {
       "name": "Zydus Lifesciences Limited",
       "isin": "",
-      "sector": "HEALTHCARE"
+      "sector": "PHARMA"
     },
     "ZYDUSWELL": {
       "name": "Zydus Wellness Limited",
