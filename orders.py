@@ -123,7 +123,17 @@ class OrderManager:
                 if ltp > 0:
                     return ltp
             except Exception as exc:
-                self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
+                # If it looks like an auth/token expiry error, set client to None
+                # so the bot's daily _refresh_groww_token() picks it up next pre-open.
+                err = str(exc).lower()
+                if "authoris" in err or "unauthoris" in err or "token" in err or "expired" in err:
+                    self.log.error(
+                        "Groww token expired for %s — will refresh at next pre-open. "
+                        "Falling back to OHLCV cache.", symbol
+                    )
+                    self._client = None   # force refresh next pre-open
+                else:
+                    self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
 
         # Fall back to cached OHLCV close price (always available)
         if self._fetcher is not None:

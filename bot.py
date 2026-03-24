@@ -165,6 +165,36 @@ class TradingBot:
     _BROKER_SYNC_EVERY = 10   # re-sync every 10 ticks (~10 min at default interval)
     _tick_count: int = 0
 
+    # Groww token refresh — track which day we last refreshed so we do it once per day
+    _token_refreshed_date: str = ""  # "YYYY-MM-DD"
+
+    def _refresh_groww_token(self) -> bool:
+        """Re-authenticate with Groww and update the client in orders + positions.
+
+        Called once per trading day at pre-open (before 09:15) so the token
+        is always fresh during market hours.  Returns True on success.
+        """
+        from growwapi import GrowwAPI
+        today = datetime.now(IST).date().isoformat()
+        if self._token_refreshed_date == today:
+            return True   # already refreshed today
+
+        try:
+            token = GrowwAPI.get_access_token(
+                api_key=self.config.api_key,
+                secret=self.config.secret,
+            )
+            client = GrowwAPI(token)
+            # Push new client into OrderManager and PositionTracker
+            self.orders._client    = client
+            self.positions._client = client
+            self._token_refreshed_date = today
+            log.info("Groww token refreshed successfully for %s.", today)
+            return True
+        except Exception as exc:
+            log.error("Groww token refresh FAILED: %s — LTP will use OHLCV cache.", exc)
+            return False
+
     def start(self) -> None:
         mode = "DRY RUN" if self.config.dry_run else "⚠️  LIVE TRADING"
         log.info("=" * 55)
@@ -192,6 +222,9 @@ class TradingBot:
 
                 if state == "pre_open":
                     # ── 09:00–09:15: pre-open warmup ──────────────────────
+                    # Refresh Groww token once per day at pre-open so it is
+                    # always valid during market hours (tokens expire daily).
+                    self._refresh_groww_token()
                     # Run a full scoring tick so signals are ready the moment
                     # the regular session opens at 09:15. Sleep 60s between
                     # warmup ticks — there are only ~15 minutes here.
