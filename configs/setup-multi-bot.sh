@@ -53,6 +53,9 @@ for profile in "${PROFILES[@]}"; do
 
     # Each bot writes its own ledger in ledgers/ (separate from cache/ — not rsynced)
     echo "PAPER_LEDGER_PATH=ledgers/paper_ledger_${profile}.json" >> "$RUN_DIR/.env"
+    # Lock this run directory to its fixed profile (prevents auto-detection override)
+    echo "STRATEGY_PROFILE_OVERRIDE=$profile" >> "$RUN_DIR/.env"
+    echo "STRATEGY_AUTO_SELECT=false" >> "$RUN_DIR/.env"
 
     chown -R $BOT_USER:$BOT_USER "$RUN_DIR"
     echo "✓ Created runs/$profile/  (ledger → ledgers/paper_ledger_${profile}.json)"

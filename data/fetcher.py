@@ -135,8 +135,10 @@ class DataFetcher:
     # NOT saved to disk — live candles are ephemeral (not final EOD prices)
     _live_quotes: dict[str, tuple[float, dict]] = {}
 
-    def __init__(self, cache: DataCache) -> None:
-        self._cache = cache
+    def __init__(self, cache: DataCache, cache_only: bool = False) -> None:
+        self._cache        = cache
+        self._cache_only   = cache_only   # True on EC2 — bulk refresh skipped, data from rsync
+        self._groww_client = None         # injected via attach_groww_client() after auth
 
     # ------------------------------------------------------------------
     # Main refresh — call once per day before strategy runs
@@ -146,7 +148,14 @@ class DataFetcher:
         """
         Download OHLCV for every stale symbol (parallelised).
         Also refreshes fundamentals on a weekly schedule.
+
+        When cache_only=True (EC2 mode), all data comes via rsync from the Mac
+        bootstrap run — skip every network call to avoid 401/block errors.
         """
+        if self._cache_only:
+            log.debug("DataFetcher: cache_only mode — skipping network refresh (data from rsync).")
+            return
+
         stale_ohlcv = symbols if force else self._cache.stale_ohlcv_symbols(symbols)
         stale_fund  = symbols if force else self._cache.stale_fund_symbols(symbols)
 
@@ -227,6 +236,10 @@ class DataFetcher:
             return 0.0
         return float(df["Close"].iloc[-1])
 
+    def attach_groww_client(self, client) -> None:
+        """Inject Groww API client so live intraday candles use Groww instead of NSE API."""
+        self._groww_client = client
+
     # ------------------------------------------------------------------
     # Live intraday candle injection
     # ------------------------------------------------------------------
@@ -285,9 +298,41 @@ class DataFetcher:
 
     def _fetch_live_quote_raw(self, symbol: str) -> dict | None:
         """
-        Hit NSE quote-equity API and return a normalised candle dict.
-        Returns None on any error (scoring falls back to last EOD data).
+        Fetch today's intraday OHLCV candle for a symbol.
+
+        Priority:
+          1. Groww API  get_ohlc()  — works from EC2, always valid if token is fresh
+          2. NSE quote-equity API   — fallback for non-EC2 / Groww auth failure
+
+        Returns None on all failures (scoring falls back to last EOD data).
         """
+        # ── Method 1: Groww API (preferred on EC2) ───────────────────────────
+        if self._groww_client is not None:
+            try:
+                key    = f"NSE_{symbol}"
+                result = self._groww_client.get_ohlc(
+                    exchange_trading_symbols=(key,),
+                    segment=self._groww_client.SEGMENT_CASH,
+                    timeout=5,
+                )
+                data = result.get(key, {}) if isinstance(result, dict) else {}
+                o = data.get("open")
+                h = data.get("high")
+                l = data.get("low")
+                c = data.get("close") or data.get("ltp")
+                v = data.get("volume", 0.0)
+                if all(x is not None for x in (o, h, l, c)):
+                    return {
+                        "open":   float(o),
+                        "high":   float(h),
+                        "low":    float(l),
+                        "close":  float(c),
+                        "volume": float(v) if v is not None else 0.0,
+                    }
+            except Exception:
+                pass   # fall through to NSE API
+
+        # ── Method 2: NSE quote-equity API (fallback, may be blocked on EC2) ─
         try:
             session = self._get_nse_session()
             url  = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
@@ -298,7 +343,7 @@ class DataFetcher:
             if not isinstance(data, dict):
                 return None
 
-            pi = data.get("priceInfo", {}) or {}
+            pi    = data.get("priceInfo", {}) or {}
             intra = pi.get("intraDayHighLow", {}) or {}
 
             o = pi.get("open")

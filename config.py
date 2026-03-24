@@ -14,8 +14,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from the project root (same directory as this file)
-load_dotenv(Path(__file__).parent / ".env")
+# Load .env from the project root (same directory as this file).
+# override=True ensures select_strategy.py changes take effect even if
+# systemd EnvironmentFile already injected stale values into the process env.
+load_dotenv(Path(__file__).parent / ".env", override=True)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -170,6 +172,9 @@ class Config:
     deploy_fraction:   float = field(default_factory=lambda: _float("RISK_DEPLOY_FRACTION",   0.90))
     dry_run_balance:   float = field(default_factory=lambda: _float("RISK_DRY_RUN_BALANCE", 100000.0))
     paper_ledger_path: str   = field(default_factory=lambda: _str  ("PAPER_LEDGER_PATH",   "ledgers/paper_ledger.json"))
+    # Set to true on EC2 — all OHLCV + fundamentals arrive via rsync from Mac.
+    # Skips every network fetch attempt (prevents 401 spam from yfinance/NSE API).
+    fetcher_cache_only: bool = field(default_factory=lambda: _bool ("FETCHER_CACHE_ONLY",   False))
 
     # ── Signal Thresholds ─────────────────────────────────────────────────────
     score_buy_threshold:  float = field(default_factory=lambda: _float("SCORE_BUY_THRESHOLD",  70.0))

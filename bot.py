@@ -183,10 +183,11 @@ class TradingBot:
                 secret=self.config.secret,
             )
             client = GrowwAPI(token)
-            # Push new client into OrderManager and PositionTracker
-            # Both live on self.strategy, not directly on TradingBot
+            # Push new client into OrderManager, PositionTracker, and DataFetcher
+            # All three live on self.strategy, not directly on TradingBot
             self.strategy.orders._client    = client
             self.strategy.positions._client = client
+            self.strategy.fetcher.attach_groww_client(client)  # intraday OHLCV via Groww
             self._token_refreshed_date = today
             log.info("Groww token refreshed successfully for %s.", today)
             return True
@@ -688,7 +689,11 @@ def build_bot() -> TradingBot:
             config.dry_run_balance, ledger.cash,
         )
     cache     = DataCache()
-    fetcher   = DataFetcher(cache)
+    fetcher   = DataFetcher(cache, cache_only=config.fetcher_cache_only)
+    if config.fetcher_cache_only:
+        log.info("DataFetcher: FETCHER_CACHE_ONLY=true — bulk refresh skipped, data from rsync.")
+    if groww_client is not None:
+        fetcher.attach_groww_client(groww_client)   # intraday OHLCV via Groww (works on EC2)
     orders.attach_fetcher(fetcher)   # dry-run: use cached close as LTP for sizing
     universe  = StockUniverse()
     universe.refresh()
