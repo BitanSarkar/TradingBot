@@ -128,10 +128,10 @@ class OrderManager:
                 err = str(exc).lower()
                 if "authoris" in err or "unauthoris" in err or "token" in err or "expired" in err:
                     self.log.error(
-                        "Groww token expired for %s — will refresh at next pre-open. "
-                        "Falling back to OHLCV cache.", symbol
+                        "Groww token expired mid-session (%s) — "
+                        "falling back to OHLCV cache until next pre-open refresh.", symbol
                     )
-                    self._client = None   # force refresh next pre-open
+                    self._client = None   # cleared; bot's _refresh_groww_token restores it
                 else:
                     self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
 

@@ -154,6 +154,7 @@ class TradingBot:
         self.config   = config
         self.strategy = strategy
         self._running = False
+        self._token_refreshed_date: str = ""   # instance-level (not class-level)
 
     _INTERVAL_EOD = 60   # 1 min — poll during EOD window until data lands
 
@@ -164,9 +165,6 @@ class TradingBot:
     # so manual trades or transfers done outside the bot stay in sync
     _BROKER_SYNC_EVERY = 10   # re-sync every 10 ticks (~10 min at default interval)
     _tick_count: int = 0
-
-    # Groww token refresh — track which day we last refreshed so we do it once per day
-    _token_refreshed_date: str = ""  # "YYYY-MM-DD"
 
     def _refresh_groww_token(self) -> bool:
         """Re-authenticate with Groww and update the client in orders + positions.
