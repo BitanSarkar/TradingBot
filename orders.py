@@ -110,21 +110,26 @@ class OrderManager:
 
     def _fetch_ltp(self, symbol: str) -> Optional[float]:
         """Fetch last traded price for a single NSE equity symbol via Groww API."""
-        try:
-            key = f"NSE_{symbol}"
-            result = self._client.get_ltp(
-                exchange_trading_symbols=(key,),
-                segment=self._client.SEGMENT_CASH,
-                timeout=5,
-            )
-            return float(result.get(key, 0)) or None
-        except Exception as exc:
-            self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
-            # Fall back to cached OHLCV close if Groww API fails
-            if self._fetcher is not None:
-                ltp = self._fetcher.get_ltp(symbol)
-                return ltp if ltp > 0 else None
-            return None
+        # In dry-run mode the Groww client is not initialised — go straight to cache
+        if self._client is not None:
+            try:
+                key = f"NSE_{symbol}"
+                result = self._client.get_ltp(
+                    exchange_trading_symbols=(key,),
+                    segment=self._client.SEGMENT_CASH,
+                    timeout=5,
+                )
+                ltp = float(result.get(key, 0))
+                if ltp > 0:
+                    return ltp
+            except Exception as exc:
+                self.log.warning("LTP fetch failed for %s: %s", symbol, exc)
+
+        # Fall back to cached OHLCV close price (always available)
+        if self._fetcher is not None:
+            ltp = self._fetcher.get_ltp(symbol)
+            return ltp if ltp > 0 else None
+        return None
 
     def get_order_status(self, order_id: str) -> Optional[dict]:
         if self._config.dry_run:
