@@ -46,6 +46,15 @@ A fully automated, score-driven equity trading bot for the Indian stock market (
 13. [EC2 Deployment](#ec2-deployment)
 14. [Full Configuration Reference](#full-configuration-reference)
 15. [Customising Your Strategy](#customising-your-strategy)
+16. [Adaptive Strategy Selector — select_strategy.py](#adaptive-strategy-selector--select_strategypy)
+    - [How It Works](#how-it-works)
+    - [15 Market Signals](#15-market-signals)
+    - [Regime Position Formula](#regime-position-formula)
+    - [6 Named Scenarios](#6-named-scenarios)
+    - [3-Step Fine-Tuning Engine](#3-step-fine-tuning-engine)
+    - [10 Signal Overlays](#10-signal-overlays)
+    - [Multi-Bot Setup](#multi-bot-setup)
+    - [Research References](#research-references)
 
 ---
 
@@ -1442,3 +1451,244 @@ WEIGHT_DEFAULT_MOMENTUM=0.20
 SCORE_BUY_THRESHOLD=72
 BOT_POLL_INTERVAL_OPEN=300    # slower tick — fundamentals don't change every minute
 ```
+
+---
+
+## Adaptive Strategy Selector — select_strategy.py
+
+`select_strategy.py` runs **before** `bot.py` every morning. It reads the local OHLCV cache (zero network calls), computes 15 continuous market signals across 15 large-cap NSE proxies, detects the current market scenario, auto-selects the best base strategy profile, then fine-tunes every trading parameter for today's exact conditions and writes them back to `.env`.
+
+```bash
+# Manual run (dry-run to preview without writing)
+python select_strategy.py --dry-run
+
+# Force a specific base profile but still fine-tune
+python select_strategy.py --profile bear-fighter
+
+# Skip fine-tuning (profile selection only)
+python select_strategy.py --no-tune
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  cache/ohlcv/*.parquet  (15 large-cap proxy stocks)         │
+└────────────────────────┬────────────────────────────────────┘
+                         │  zero network calls
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 1: Compute 15 signals per proxy, aggregate to market  │
+│          level.  Derive regime_pos (0=crash → 3=bull).      │
+└────────────────────────┬────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 2: Detect scenario (CAPITULATION / MOMENTUM_ACCEL /   │
+│          BEAR_RALLY / DISTRIBUTION / OVERBOUGHT_BULL /      │
+│          CHOPPY).  Auto-select base profile.                │
+└────────────────────────┬────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step 3: Fine-tune — 4-anchor interpolation + 10 overlays   │
+│          + scenario override table → write .env             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 15 Market Signals
+
+Signals are computed from cached daily OHLCV of 15 large-cap NSE proxies spanning 6 sectors (banking, IT, energy, FMCG, auto, infra, finance, telecom).
+
+#### Original 11 Signals
+
+| Signal | Formula / Source | What it measures |
+|--------|-----------------|-----------------|
+| `bull_ratio` | Fraction of proxies where `close > SMA(50)` | Broad market health |
+| `avg_rsi` | Average RSI(14) across proxies | Overbought / oversold |
+| `volatility_pct` | Average 14-day ATR as % of price | Market fear / range |
+| `momentum_5d` | Average 5-day % return | Recent price trend |
+| `vol_ratio` | Average `SMA(5, vol) / SMA(20, vol)` | Volume expansion/contraction |
+| `trend_consistency` | Fraction of last 20 days matching net 5-day direction | Trend quality vs noise |
+| `stretch_from_sma20` | `(price − SMA20) / ATR` | Overextension from mean |
+| `down_vol_surge` | Fraction of proxies where peak-vol day in last 10 was a down day AND ≥ 2× avg | Climactic selling |
+| `price_vol_divergence` | Pearson correlation of daily price-change vs volume-change | Volume confirmation |
+| `sector_breadth_spread` | Standard deviation of per-sector bull_ratios | Sector rotation intensity |
+| `regime_velocity` | `bull_ratio_today − bull_ratio_5d_ago` | Trend of the trend |
+
+#### 4 New Research-Backed Signals
+
+| Signal | Formula | Research Basis | Thresholds |
+|--------|---------|---------------|-----------|
+| **`hi52_proximity`** | Fraction of proxies within 5% of their 52-week high | George & Hwang (2004): 52wk-high stocks = 45% of momentum portfolios but **70% of returns**. Strongest momentum sub-signal. | >55% = breakout mode; <10% = deep bear |
+| **`choppiness_index`** | `100 × log10(Σ ATR(1,i) / (HH−LL)) / log10(14)` | QuantifiedStrategies backtests: CI>62 = range-bound (breakouts fail), CI<38 = trending. More precise than momentum heuristics. | >62 = choppy; <38 = trending |
+| **`obv_divergence`** | OBV 5-day slope vs price 5-day slope alignment | Wyckoff: OBV declining while price holds = distribution ("effort without result"). Cumulative nature harder to fake than single-period volume. | <−0.25 = distribution; >+0.25 = accumulation |
+| **`adx_avg`** | Average ADX (Wilder's method, period=14) across proxies | Used with Choppiness Index to double-confirm choppy vs trending. | <20 = no trend; >25 = trending; >40 = strong |
+
+#### Derived Flag
+
+| Flag | Logic | Research Basis |
+|------|-------|---------------|
+| **`momentum_crash_risk`** | `momentum_1m > 8% AND max_drawdown_6m < −20%` | Daniel & Moskowitz (NBER 2014): the primary momentum crash indicator. 1-month bounce >8% after a prolonged bear = losers outperform winners violently. Halt new longs immediately. |
+
+---
+
+### Regime Position Formula
+
+```
+regime_pos = bull_ratio × 3.0
+           + RSI adjustment       (±0.40)   — overbought RSI nudges bull
+           + momentum_5d adj      (±0.30)   — 5d return confirms regime
+           + consistency adj      (±0.15)   — consistent trend = more certain
+           + velocity adj         (±0.20)   — accelerating = slight boost
+           + hi52_proximity adj   (−0.13/+0.25)  — NEW: 52wk high = bull confirmation
+```
+
+Range: 0.0 (crash) → 3.0 (full bull). Used as the interpolation variable in Step 1 of fine-tuning.
+
+---
+
+### 6 Named Scenarios
+
+Each scenario fires on a specific signal combination and replaces the interpolated base parameters with a pre-calibrated override table. When two scenarios overlap, `_most_conservative_merge()` takes the stricter value per-parameter.
+
+#### CAPITULATION
+**Trigger:** `bull_ratio < 25% AND RSI < 38 AND down_vol_surge > 30% AND vol_ratio > 1.5 AND volatility_pct > 3.0`
+
+Panic selling with climactic volume. Research: average NSE capitulation bounce = +30–50% over 3 months. **Most aggressive bypass entry** — quality stocks are indiscriminately beaten down. Wide stops (3.5× ATR) because post-capitulation whipsaw is extreme. Hold through the recovery (sell_threshold = 30).
+
+#### OVERBOUGHT_BULL
+**Trigger:** `bull_ratio > 65% AND RSI > 68 AND stretch_from_sma20 > 1.8 ATR AND vol_ratio < 1.0`
+
+Bull exhausted, volume drying up. Big moves are behind. Demand real pullback before entering (pullback_mult = 1.0, RSI max = 52). Arm trailing stop very early (activation = 1.5%) to protect any gains. Modest R:R target (1.8).
+
+#### MOMENTUM_ACCEL
+**Trigger:** `bull_ratio > 65% AND momentum_5d > 3.5% AND trend_consistency > 0.65 AND vol_ratio > 1.3 AND hi52_proximity > 45% AND NOT momentum_crash_risk`
+
+The only scenario that requires **52-week high proximity** — George & Hwang research shows stocks near their 52wk high generate 70% of momentum returns. NSE Nifty200 Momentum30 is the best-performing factor index in bull regimes. Indian bull runs average 24–75 months — **hold winners longest** (sell_threshold = 34), buy breakouts immediately (pullback_mult = 0), maximum holdings (15).
+
+#### BEAR_RALLY
+**Trigger:** `(bull_ratio < 40% AND momentum_5d > 1.5% AND vol_ratio < 1.0)` **OR** `momentum_crash_risk = True`
+
+Low-volume countertrend bounce, or momentum crash danger zone. Research: average bear market rally = 44 days, +10–15%. This is a trap — **most restrictive entry** (score threshold = 78, only RSI < 40 stocks). Take profits quickly (R:R = 2.0), exit fast on any weakness (sell_threshold = 46). Maximum 4 holdings.
+
+#### DISTRIBUTION
+**Trigger:** `bull_ratio > 50% AND obv_divergence < −0.20 AND vol_ratio > 1.1`
+
+Price holding but OBV declining — Wyckoff "effort without result." Smart money exiting into retail strength. This ends in a sharp breakdown. Raise sell threshold to 47 (exit faster), arm trailing stop at 1.8% (protect from sudden breakdown), no buying extended stocks (RSI max = 50).
+
+#### CHOPPY
+**Trigger:** `choppiness_index > 62 AND adx_avg < 22 AND |momentum_5d| < 1.5%`
+
+Research-validated CI + ADX double-confirmation. Breakouts fail in this regime. "No stop at all beats fixed stops in mean-reversion" (QuantifiedStrategies). Highest quality bar of all scenarios (min_quality = 64). Buy only near lower Bollinger Band (BB_max = 0.38). Small targets — range boundaries only (R:R = 1.5).
+
+---
+
+### 3-Step Fine-Tuning Engine
+
+#### Step 1 — Base Interpolation
+
+Every parameter is smoothly interpolated across 4 anchors using `regime_pos`:
+
+```
+regime_pos:   0.0 = crash   1.0 = bear   2.0 = neutral   3.0 = bull
+```
+
+| Parameter | Crash | Bear | Neutral | Bull | Research Basis |
+|-----------|-------|------|---------|------|---------------|
+| `SCORE_BUY_THRESHOLD` | 78 | 74 | 69 | 63 | Bear: quality factor 40% weight; Bull: momentum 40% |
+| `EXIT_ATR_STOP_MULT` | 3.2 | 2.5 | 2.0 | 1.4 | Research standard: 3× ATR(14); tight in trending markets |
+| `EXIT_RISK_REWARD_RATIO` | 1.6 | 2.0 | 2.5 | 3.5 | 1:3.5 requires only 22% win rate to be profitable |
+| `EXIT_TRAILING_ACTIVATION_PCT` | 5.0 | 3.5 | 2.0 | 1.0 | Research: activate trailing only after ~1× ATR gain |
+| `RISK_MAX_HOLDINGS` | 4 | 6 | 10 | 15 | Research: 12–18 large-caps = 90% diversification benefit |
+| `ENTRY_PULLBACK_MULT` | 1.8 | 1.2 | 0.5 | 0.1 | Pullback entries: 50–70% win rate vs 30–45% for breakouts |
+
+#### Step 2 — 10 Signal Overlays
+
+Applied sequentially on top of the interpolated base:
+
+| # | Overlay | Condition | Effect | Research |
+|---|---------|-----------|--------|---------|
+| a | **Volatility** | ATR% > 4% | Widen stops (+ATR mult), reduce holdings (−3) | Scale with market fear |
+| b | **Momentum** | mom_5d > 3% | Lower buy threshold (−2.5), reduce pullback requirement (−0.3), extend target (+0.3 R:R) | Strong trend continuation |
+| c | **Volume** | vol_ratio > 1.5 | Relax volume filter, boost intraday weight (+0.05) | Expanding volume confirms moves |
+| d | **Trend consistency** | tc > 0.68 | Lower pullback mult (×0.8), lower quality bar (−2) | Consistent trend = less mean-reversion |
+| e | **Stretch** | stretch > 2 ATR | Tighten RSI max (54), tighten BB max (0.45), demand more pullback | Overbought extension |
+| f | **Sector breadth** | spread > 0.25 | Raise quality bar (+4), widen pool (+10 top-N) | Rotation = selective, widen universe |
+| g | **52wk proximity** (NEW) | hi52 > 55% | Lower pullback mult (×0.70), lower buy threshold (−2.5) | George & Hwang: buy breakouts in 52wk-high regime |
+| h | **OBV divergence** (NEW) | obv_div < −0.25 | Raise buy threshold (+3), raise sell threshold (+4) | Wyckoff: distribution = exit faster |
+| i | **Momentum crash** (NEW) | crash_risk = True | Raise threshold (+5), cap holdings at 5, more pullback (+0.8), raise sell threshold (+4) | Daniel & Moskowitz: halt momentum longs |
+| j | **Extreme chop** (NEW) | CI > 65 AND ADX < 18 | Raise quality (+6), range target (R:R → 1.5), faster exit (+3 sell_threshold) | QuantifiedStrategies: mean-reversion only |
+
+#### Step 3 — Scenario Overrides
+
+If a named scenario is detected, its pre-calibrated table **replaces** the output of Steps 1+2. When two scenarios overlap (e.g. OVERBOUGHT_BULL + DISTRIBUTION), `_most_conservative_merge()` takes the stricter value per-parameter.
+
+**Hard safety clips applied after all steps:**
+
+| Parameter | Min | Max |
+|-----------|-----|-----|
+| `ENTRY_BULL_RATIO_MIN` | 0.02 | 0.50 |
+| `ENTRY_MIN_QUALITY` | 38 | 70 |
+| `EXIT_ATR_STOP_MULT` | 1.0 | 4.0 |
+| `RISK_MAX_HOLDINGS` | 3 | 18 |
+| `SCORE_TOP_N` | 25 | 75 |
+| `SCORE_BUY_THRESHOLD` | 60 | 85 |
+| `INTRADAY_PULSE_WEIGHT` | 0.08 | 0.40 |
+
+---
+
+### Multi-Bot Setup
+
+Five strategy profiles run in parallel on EC2, each with its own systemd service, isolated `.env`, and paper ledger:
+
+| Profile | When auto-selected | Behaviour |
+|---------|-------------------|-----------|
+| `aggressive` | MOMENTUM_ACCEL or regime_pos ≥ 2.5 | Max holdings, low buy threshold, buy breakouts |
+| `max-profit` | — | Balanced across all regimes, highest conviction |
+| `balanced` | CHOPPY or regime_pos 1.75–2.5 | Moderate settings, mixed signals |
+| `bear-fighter` | BEAR_RALLY / DISTRIBUTION / OVERBOUGHT_BULL or regime_pos 1.0–1.75 | Tight entries, fast exits |
+| `contrarian` | CAPITULATION or regime_pos < 1.0 | Buys panic lows, widest stops, rides recovery |
+
+```bash
+# Set up all 5 bots (run once on EC2)
+sudo configs/setup-multi-bot.sh
+
+# Check all bots
+sudo systemctl status 'tradingbot-*'
+
+# Watch one bot
+sudo journalctl -u tradingbot-aggressive -f
+
+# Compare P&L across all 5
+for p in max-profit bear-fighter aggressive contrarian balanced; do
+  echo -n "$p: "
+  python3 -c "
+import json,os; f='ledgers/paper_ledger_$p.json'
+d=json.load(open(f)) if os.path.exists(f) else {}
+cash=d.get('cash',0); start=d.get('starting_balance',1000000)
+trades=len([t for t in d.get('trades',[]) if t.get('action')=='SELL'])
+print(f'cash=₹{cash:,.0f}  return={(cash/start-1)*100:+.2f}%  closed_trades={trades}')"
+done
+```
+
+Credentials (`GROWW_API_KEY`, `GROWW_SECRET`, `SNS_TOPIC_ARN`) are read once from the root `.env` — never duplicated across profiles.
+
+---
+
+### Research References
+
+| Finding | Source | Applied In |
+|---------|--------|-----------|
+| 52-week high proximity = 70% of momentum returns | George & Hwang (2004), Bauer UH | `hi52_proximity` signal, MOMENTUM_ACCEL trigger, overlay g |
+| Momentum crashes: 1-month bounce >8% after >20% drawdown | Daniel & Moskowitz (NBER 2014) | `momentum_crash_risk` flag, BEAR_RALLY trigger, overlay i |
+| CI > 62 + ADX < 20 = range-bound confirmed | QuantifiedStrategies backtests | `choppiness_index` + `adx_avg` signals, CHOPPY trigger, overlay j |
+| OBV divergence = Wyckoff distribution signal | Wyckoff Analytics, StockCharts | `obv_divergence` signal, DISTRIBUTION trigger, overlay h |
+| 3× ATR(14) stop = research standard for swing trading | LuxAlgo, QuantifiedStrategies | EXIT_ATR_STOP_MULT base anchor (crash = 3.2) |
+| Chandelier: activate after 1× ATR gain, not immediately | QuantifiedStrategies | EXIT_TRAILING_ACTIVATION_PCT base anchor |
+| 1:3.5 R:R requires only 22% win rate | LuxAlgo win-rate/R:R research | EXIT_RISK_REWARD_RATIO bull anchor = 3.5 |
+| 12–18 large-cap stocks = 90% diversification benefit | MDPI portfolio research | RISK_MAX_HOLDINGS anchors (4/6/10/15) |
+| Pullback entries: 50–70% win rate vs 30–45% for breakouts | HeyGoTrade backtests | ENTRY_PULLBACK_MULT approach, non-zero in bear regimes |
+| NSE Nifty200 Momentum30 = best factor in bull regime | NSE Multi-Factor Index whitepaper | MOMENTUM_ACCEL scenario parameters |
+| Indian bull runs average 24–75 months | Nifty historical analysis | SCORE_SELL_THRESHOLD = 34 in MOMENTUM_ACCEL |
+| Dynamic factor timing: Sharpe 0.66 vs 0.59 static | Shu & Mulvey (arXiv 2024) | Regime-adjusted INTRADAY_PULSE_WEIGHT |
