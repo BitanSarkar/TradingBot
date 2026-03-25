@@ -685,8 +685,8 @@ def build_bot() -> TradingBot:
 
         log.info(
             "Paper trading enabled — balance ₹%.2f | cash ₹%.2f | "
-            "ledger: cache/paper_ledger.json",
-            config.dry_run_balance, ledger.cash,
+            "ledger: %s",
+            config.dry_run_balance, ledger.cash, config.paper_ledger_path,
         )
     cache     = DataCache()
     fetcher   = DataFetcher(cache, cache_only=config.fetcher_cache_only)
