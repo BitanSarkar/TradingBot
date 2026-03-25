@@ -23,11 +23,24 @@ Usage
 """
 
 import argparse
+import datetime as _dt
 import logging
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+_IST = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
+
+
+class _ISTFormatter(logging.Formatter):
+    """logging.Formatter that always renders %(asctime)s in IST (UTC+5:30)."""
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        ct = _dt.datetime.fromtimestamp(record.created, tz=_IST)
+        if datefmt:
+            return ct.strftime(datefmt)
+        return ct.strftime("%Y-%m-%d %H:%M:%S")
 
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
@@ -40,7 +53,7 @@ def setup_logging() -> logging.Logger:
     Path("logs").mkdir(parents=True, exist_ok=True)
 
     log_format  = "%(asctime)s  %(levelname)-8s  %(message)s"
-    date_format = "%Y-%m-%d %H:%M:%S"
+    date_format = "%Y-%m-%d %H:%M:%S IST"
 
     # Root logger
     logger = logging.getLogger("bootstrap")
@@ -49,12 +62,12 @@ def setup_logging() -> logging.Logger:
     # Console handler — same format so the terminal also shows timestamps
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG)
-    console.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+    console.setFormatter(_ISTFormatter(log_format, datefmt=date_format))
 
     # File handler — appends across runs; easy to grep by date
     file_handler = logging.FileHandler("logs/bootstrap.log", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter(log_format, datefmt=date_format))
+    file_handler.setFormatter(_ISTFormatter(log_format, datefmt=date_format))
 
     logger.addHandler(console)
     logger.addHandler(file_handler)

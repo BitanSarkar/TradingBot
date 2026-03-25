@@ -1,6 +1,19 @@
+import datetime
 import logging
 import sys
 from pathlib import Path
+
+_IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
+class _ISTFormatter(logging.Formatter):
+    """logging.Formatter that always renders %(asctime)s in IST (UTC+5:30)."""
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        ct = datetime.datetime.fromtimestamp(record.created, tz=_IST)
+        if datefmt:
+            return ct.strftime(datefmt)
+        return ct.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_logger(name: str = "TradingBot") -> logging.Logger:
@@ -17,9 +30,9 @@ def get_logger(name: str = "TradingBot") -> logging.Logger:
     if not root.handlers:               # only wire up handlers once
         root.setLevel(logging.DEBUG)    # let handlers decide the cutoff
 
-        fmt = logging.Formatter(
+        fmt = _ISTFormatter(
             fmt="%(asctime)s  %(levelname)-8s  [%(name)s]  %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+            datefmt="%Y-%m-%d %H:%M:%S IST",
         )
 
         # ── Console — INFO and above ─────────────────────────────────────
