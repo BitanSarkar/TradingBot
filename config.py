@@ -50,8 +50,9 @@ def _float(key: str, default: float) -> float:
 class Config:
 
     # ── Groww API Credentials ─────────────────────────────────────────────────
-    api_key: str = field(default_factory=lambda: _str("GROWW_API_KEY", "your_api_key"))
-    secret:  str = field(default_factory=lambda: _str("GROWW_SECRET",  "your_secret"))
+    api_key:     str = field(default_factory=lambda: _str("GROWW_API_KEY",     "your_api_key"))
+    totp_secret: str = field(default_factory=lambda: _str("GROWW_TOTP_SECRET", ""))
+    secret:      str = field(default_factory=lambda: _str("GROWW_SECRET",      ""))
 
     # ── Bot Behaviour ─────────────────────────────────────────────────────────
     dry_run:              bool = field(default_factory=lambda: _bool("BOT_DRY_RUN",              True))

@@ -178,10 +178,7 @@ class TradingBot:
             return True   # already refreshed today
 
         try:
-            token = GrowwAPI.get_access_token(
-                api_key=self.config.api_key,
-                secret=self.config.secret,
-            )
+            token  = _groww_get_token(self.config)
             client = GrowwAPI(token)
             # Push new client into OrderManager, PositionTracker, and DataFetcher
             # All three live on self.strategy, not directly on TradingBot
@@ -627,13 +624,28 @@ class TradingBot:
 #  Entry point
 # ======================================================================
 
+def _groww_get_token(config) -> str:
+    """Get a Groww access token — TOTP mode preferred, approval mode fallback."""
+    from growwapi import GrowwAPI
+    if config.totp_secret.strip():
+        import pyotp
+        return GrowwAPI.get_access_token(
+            api_key=config.api_key,
+            totp=pyotp.TOTP(config.totp_secret.strip()).now(),
+        )
+    return GrowwAPI.get_access_token(
+        api_key=config.api_key,
+        secret=config.secret,
+    )
+
+
 def build_bot() -> TradingBot:
     config = Config()
 
     from growwapi import GrowwAPI
     groww_client = None
     try:
-        token = GrowwAPI.get_access_token(api_key=config.api_key, secret=config.secret)
+        token = _groww_get_token(config)
         groww_client = GrowwAPI(token)
         log.info("Authenticated with Groww%s.", " (dry-run — no real orders)" if config.dry_run else "")
     except Exception as exc:
