@@ -9,7 +9,7 @@ _IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 class _ISTFormatter(logging.Formatter):
     """logging.Formatter that always renders %(asctime)s in IST (UTC+5:30)."""
 
-    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+    def formatTime(self, record: logging.LogRecord, datefmt=None) -> str:
         ct = datetime.datetime.fromtimestamp(record.created, tz=_IST)
         if datefmt:
             return ct.strftime(datefmt)
