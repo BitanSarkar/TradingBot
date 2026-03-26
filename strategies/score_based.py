@@ -201,8 +201,8 @@ class ScoreBasedStrategy(BaseStrategy):
             )
 
             if not entry.qualified:
-                self.log.debug(
-                    "BUY skipped %s (score=%.1f): %s",
+                self.log.info(
+                    "BUY skipped %-12s score=%.1f  reason: %s",
                     candidate.symbol, candidate.composite, entry.reason,
                 )
                 continue
