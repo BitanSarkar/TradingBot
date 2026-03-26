@@ -147,15 +147,19 @@ class ScoreBasedStrategy(BaseStrategy):
                 len(buy_candidates), cfg.score_buy_threshold, cfg.score_top_n,
             )
         else:
-            best = scores[0] if scores else None
             self.log.info(
-                "BUY pipeline: 0 candidates — threshold=%.1f  best=%s (%.1f)  "
-                "top10_range=%.1f–%.1f",
+                "BUY pipeline: 0 candidates above threshold %.1f — "
+                "top scores below threshold:",
                 cfg.score_buy_threshold,
-                best.symbol if best else "—", best.composite if best else 0,
-                scores[9].composite if len(scores) > 9 else 0,
-                scores[0].composite if scores else 0,
             )
+            for s in scores[:5]:
+                gap = cfg.score_buy_threshold - s.composite
+                self.log.info(
+                    "  %-12s  composite=%.1f (%.1f short)  "
+                    "tech=%.0f  fund=%.0f  mom=%.0f",
+                    s.symbol, s.composite, gap,
+                    s.technical, s.fundamental, s.momentum,
+                )
         # effective_holdings = confirmed positions + pending BUY orders
         effective_holdings = self.positions.effective_holdings()
 
@@ -225,8 +229,11 @@ class ScoreBasedStrategy(BaseStrategy):
 
             if not entry.qualified:
                 self.log.info(
-                    "BUY skipped %-12s score=%.1f  reason: %s",
-                    candidate.symbol, candidate.composite, entry.reason,
+                    "BUY skipped %-12s composite=%.1f  tech=%.0f fund=%.0f mom=%.0f  "
+                    "entry_quality=%.1f  reason: %s",
+                    candidate.symbol, candidate.composite,
+                    candidate.technical, candidate.fundamental, candidate.momentum,
+                    entry.quality_score, entry.reason,
                 )
                 continue
 
