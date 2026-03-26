@@ -498,7 +498,7 @@ class PositionTracker:
             total_value      += val
             sign = "+" if upnl >= 0 else "-"
             log.info(
-                "  %-14s  %4d  Rs%10,.2f  Rs%10,.2f  %s Rs%9,.2f  %+.1f%%",
+                "  %-14s  %4d  Rs%10.2f  Rs%10.2f  %s Rs%9.2f  %+.1f%%",
                 pos.symbol, pos.quantity, pos.avg_buy_price, ltp,
                 sign, abs(upnl), pct,
             )
@@ -507,7 +507,7 @@ class PositionTracker:
             log.info("  -- Pending (unconfirmed) --")
             for order in sorted(pending, key=lambda o: o.symbol):
                 log.info(
-                    "  %-14s  %4d  %-6s  est.Rs%8,.2f  waiting %.0fs",
+                    "  %-14s  %4d  %-6s  est.Rs%8.2f  waiting %.0fs",
                     order.symbol, order.quantity, order.action,
                     order.price, order.age_seconds,
                 )

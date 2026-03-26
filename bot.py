@@ -325,11 +325,10 @@ class TradingBot:
             order_id = orders.buy(sig.symbol, sig.quantity, sig.order_type, sig.price)
             if order_id:
                 if self.config.dry_run:
-                    # Dry-run: no real settlement, record immediately
-                    pos.record_buy(sig.symbol, sig.quantity, sig.price)
+                    # MARKET orders have price=0 — use LTP as simulated fill price
+                    fill_price = sig.price or self.strategy.fetcher.get_ltp(sig.symbol)
+                    pos.record_buy(sig.symbol, sig.quantity, fill_price)
                 else:
-                    # Live: order is placed but not yet filled/settled
-                    # add_pending() prevents duplicate orders on next tick
                     pos.add_pending(sig.symbol, order_id, "BUY",
                                     sig.quantity, sig.price)
 
@@ -338,7 +337,8 @@ class TradingBot:
             order_id = orders.sell(sig.symbol, sig.quantity, sig.order_type, sig.price)
             if order_id:
                 if self.config.dry_run:
-                    pos.record_sell(sig.symbol, sig.quantity, sig.price)
+                    fill_price = sig.price or self.strategy.fetcher.get_ltp(sig.symbol)
+                    pos.record_sell(sig.symbol, sig.quantity, fill_price)
                 else:
                     pos.add_pending(sig.symbol, order_id, "SELL",
                                     sig.quantity, sig.price)
