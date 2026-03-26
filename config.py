@@ -190,7 +190,7 @@ class Config:
     # quantity_per_trade (static qty).
     dynamic_sizing:    bool  = field(default_factory=lambda: _bool ("RISK_DYNAMIC_SIZING",    True))
     deploy_fraction:   float = field(default_factory=lambda: _float("RISK_DEPLOY_FRACTION",   0.90))
-    dry_run_balance:   float = field(default_factory=lambda: _float("RISK_DRY_RUN_BALANCE", 100000.0))
+    dry_run_balance:   float = field(default_factory=lambda: _float("RISK_DRY_RUN_BALANCE", 1000000.0))
     paper_ledger_path: str   = field(default_factory=lambda: _str  ("PAPER_LEDGER_PATH",   "ledgers/paper_ledger.json"))
     # Set to true on EC2 — all OHLCV + fundamentals arrive via rsync from Mac.
     # Skips every network fetch attempt (prevents 401 spam from yfinance/NSE API).
