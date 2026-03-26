@@ -141,10 +141,21 @@ class ScoreBasedStrategy(BaseStrategy):
             s for s in scores[: cfg.score_top_n]
             if s.composite >= cfg.score_buy_threshold
         ]
-        self.log.info(
-            "BUY pipeline: %d candidates above threshold %.1f  (top_n=%d)",
-            len(buy_candidates), cfg.score_buy_threshold, cfg.score_top_n,
-        )
+        if buy_candidates:
+            self.log.info(
+                "BUY pipeline: %d candidates above threshold %.1f  (top_n=%d)",
+                len(buy_candidates), cfg.score_buy_threshold, cfg.score_top_n,
+            )
+        else:
+            best = scores[0] if scores else None
+            self.log.info(
+                "BUY pipeline: 0 candidates — threshold=%.1f  best=%s (%.1f)  "
+                "top10_range=%.1f–%.1f",
+                cfg.score_buy_threshold,
+                best.symbol if best else "—", best.composite if best else 0,
+                scores[9].composite if len(scores) > 9 else 0,
+                scores[0].composite if scores else 0,
+            )
         # effective_holdings = confirmed positions + pending BUY orders
         effective_holdings = self.positions.effective_holdings()
 

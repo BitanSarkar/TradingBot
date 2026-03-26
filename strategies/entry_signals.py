@@ -316,11 +316,12 @@ def compute_entry_quality(
     """
 
     # ── Guard: not enough data ────────────────────────────────────────────────
-    if df is None or len(df) < max(atr_period + 2, 21):
+    need = max(atr_period + 2, 21)
+    if df is None or len(df) < need:
         return EntryQuality(
             qualified=False, entry_price=current_ltp, use_limit=False,
             quality_score=0.0, score_velocity=0.0, score_accel=0.0,
-            reason="insufficient OHLCV history",
+            reason=f"insufficient OHLCV history (have={len(df) if df is not None else 0} need={need})",
         )
 
     close  = df["Close"].astype(float)
@@ -462,6 +463,17 @@ def compute_entry_quality(
             min_score        = min_score_overall if min_score_overall > 0 else 0.0,
         )
         if intraday_mode == "NO_ENTRY":
+            momentum_intact = current_score >= min_score_overall and velocity > -2.0
+            if not momentum_intact:
+                _why = (
+                    f"score={current_score:.1f}<min={min_score_overall:.0f}"
+                    if current_score < min_score_overall
+                    else f"score_vel={velocity:+.2f}<-2.0"
+                )
+            elif v_session <= 0:
+                _why = f"v_session={v_session:.3f}<=0 (price declining all session)"
+            else:
+                _why = f"v_session={v_session:.3f}>0 but v_recent={v_recent:.3f}>=0 (no dip to buy)"
             return EntryQuality(
                 qualified=False, entry_price=current_ltp, use_limit=False,
                 quality_score=0.0, score_velocity=velocity, score_accel=accel,
@@ -469,7 +481,7 @@ def compute_entry_quality(
                 price_velocity_score=price_velocity_score,
                 intraday_mode=intraday_mode, entry_premium=entry_premium,
                 atr=0.0,
-                reason=f"intraday_mode=NO_ENTRY (v_session={v_session:.3f} v_recent={v_recent:.3f})",
+                reason=f"NO_ENTRY: {_why}  v_session={v_session:.3f} v_recent={v_recent:.3f}",
             )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -577,10 +589,17 @@ def compute_entry_quality(
             price_velocity_score=price_velocity_score,
             intraday_mode=intraday_mode, entry_premium=entry_premium,
             reason=(
-                f"quality={quality:.1f} < threshold={min_quality_score:.0f} "
-                f"(vel={velocity_score:.0f} price={price_score:.0f} "
-                f"vol={volume_score:.0f} regime={regime_score:.0f} "
-                f"pvel={price_velocity_score:.0f})"
+                f"quality={quality:.1f} < {min_quality_score:.0f}  "
+                f"vel={velocity_score:.0f}({velocity:+.2f}pt)  "
+                f"price={price_score:.0f}(RSI={rsi:.0f} %B={pct_b:.2f})  "
+                f"vol={volume_score:.0f}({vol_ratio:.2f}x)  "
+                f"regime={regime_score:.0f}(bull={bull_ratio*100:.0f}%)"
+                if universe_scores else
+                f"quality={quality:.1f} < {min_quality_score:.0f}  "
+                f"vel={velocity_score:.0f}({velocity:+.2f}pt)  "
+                f"price={price_score:.0f}(RSI={rsi:.0f} %B={pct_b:.2f})  "
+                f"vol={volume_score:.0f}({vol_ratio:.2f}x)  "
+                f"regime={regime_score:.0f}"
             ),
         )
 
