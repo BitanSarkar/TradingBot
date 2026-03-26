@@ -152,13 +152,29 @@ class ScoreBasedStrategy(BaseStrategy):
                 "top scores below threshold:",
                 cfg.score_buy_threshold,
             )
+            _TECH_KEYS  = ("rsi", "macd", "bollinger", "sma_cross", "volume", "momentum")
+            _FUND_KEYS  = ("pe", "pb", "roe", "debt_equity", "rev_growth", "earn_growth", "margin")
+            _EXTRA_KEYS = ("intraday_pulse", "sentiment")
             for s in scores[:5]:
                 gap = cfg.score_buy_threshold - s.composite
+                c   = s.components
+                tech_str  = " ".join(
+                    f"{k}={c[k]:.0f}" for k in _TECH_KEYS if k in c
+                )
+                fund_str  = " ".join(
+                    f"{k}={c[k]:.0f}" for k in _FUND_KEYS if k in c
+                )
+                extra_str = " ".join(
+                    f"{k}={c[k]:.0f}" for k in _EXTRA_KEYS if k in c
+                )
                 self.log.info(
-                    "  %-12s  composite=%.1f (%.1f short)  "
-                    "tech=%.0f  fund=%.0f  mom=%.0f",
+                    "  %-12s  composite=%.1f (need +%.1f)  "
+                    "tech=%.0f [%s]  fund=%.0f [%s]  mom=%.0f%s",
                     s.symbol, s.composite, gap,
-                    s.technical, s.fundamental, s.momentum,
+                    s.technical, tech_str,
+                    s.fundamental, fund_str,
+                    s.momentum,
+                    f"  {extra_str}" if extra_str else "",
                 )
         # effective_holdings = confirmed positions + pending BUY orders
         effective_holdings = self.positions.effective_holdings()
