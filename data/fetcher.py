@@ -1008,14 +1008,7 @@ class DataFetcher:
         except Exception:
             pass
 
-        # ── Method 2: nselib pe_ratio bulk (pre-loaded, zero extra network call) ──
-        pe_bulk: dict = getattr(self, "_nselib_pe_bulk", {})
-        pe_val = pe_bulk.get(symbol)
-        if pe_val is not None:
-            # Partial data — only P/E known; scoring will use what it can.
-            return {"pe": pe_val}
-
-        # ── Method 3: yfinance Ticker.info (stdout/stderr suppressed) ────
+        # ── Method 2: yfinance Ticker.info (stdout/stderr suppressed) ────
         # Yahoo Finance prints "HTTP Error 401" directly to stdout before
         # raising — redirect both streams to /dev/null so logs stay clean.
         try:
@@ -1041,7 +1034,7 @@ class DataFetcher:
         except Exception:
             pass
 
-        # ── Method 4: Screener.in (HTML parse — no auth, works for all NSE stocks) ──
+        # ── Method 3: Screener.in (HTML parse — no auth, works for all NSE stocks) ──
         # Parses the #top-ratios section: Market Cap, Stock P/E, Book Value,
         # Dividend Yield, ROE.  Computes P/B = Current Price / Book Value.
         try:
@@ -1112,5 +1105,11 @@ class DataFetcher:
                         return result
         except Exception:
             pass
+
+        # ── Method 4: nselib pe_ratio bulk (last resort — PE only) ──────────────
+        pe_bulk: dict = getattr(self, "_nselib_pe_bulk", {})
+        pe_val = pe_bulk.get(symbol)
+        if pe_val is not None:
+            return {"pe": pe_val}
 
         return {}

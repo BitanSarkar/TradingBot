@@ -64,7 +64,7 @@ def pe_score(fund: dict, sector: str = "DEFAULT") -> float:
         "DEFAULT":  (10, 20, 50),
     }
     lo, ideal, hi = sector_pe.get(sector.upper(), sector_pe["DEFAULT"])
-    pe = _safe(fund.get("trailingPE"), default=None)
+    pe = _safe(fund.get("trailingPE") or fund.get("pe"), default=None)
     if pe is None or pe <= 0:
         return 50.0   # unknown — neutral
 
@@ -83,7 +83,7 @@ def pb_score(fund: dict) -> float:
       • P/B 1–3  → fair value range
       • P/B > 5  → expensive → low score
     """
-    pb = _safe(fund.get("priceToBook"), default=None)
+    pb = _safe(fund.get("priceToBook") or fund.get("pb"), default=None)
     if pb is None or pb <= 0:
         return 50.0
     if pb < 1.0:
@@ -101,7 +101,7 @@ def roe_score(fund: dict) -> float:
       • ROE < 5%   → poor → low score
       • Negative ROE → very low
     """
-    roe = _safe(fund.get("returnOnEquity"), default=None)
+    roe = _safe(fund.get("returnOnEquity") or fund.get("roe"), default=None)
     if roe is None:
         return 50.0
     roe_pct = roe * 100
@@ -187,7 +187,7 @@ def dividend_yield_score(fund: dict) -> float:
       • 0%         → 40  (no income)
       • >8%        → suspect (yield trap) → drops back
     """
-    dy = _safe(fund.get("dividendYield"), default=None)
+    dy = _safe(fund.get("dividendYield") or fund.get("div_yield"), default=None)
     if dy is None or dy == 0:
         return 40.0
     pct = dy * 100
