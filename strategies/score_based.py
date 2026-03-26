@@ -141,6 +141,10 @@ class ScoreBasedStrategy(BaseStrategy):
             s for s in scores[: cfg.score_top_n]
             if s.composite >= cfg.score_buy_threshold
         ]
+        self.log.info(
+            "BUY pipeline: %d candidates above threshold %.1f  (top_n=%d)",
+            len(buy_candidates), cfg.score_buy_threshold, cfg.score_top_n,
+        )
         # effective_holdings = confirmed positions + pending BUY orders
         effective_holdings = self.positions.effective_holdings()
 
@@ -155,13 +159,21 @@ class ScoreBasedStrategy(BaseStrategy):
 
         for candidate in buy_candidates:
             if candidate.symbol in effective_holdings:
+                self.log.info("BUY skipped %-12s score=%.1f  reason: already holding", candidate.symbol, candidate.composite)
                 continue
             if len(effective_holdings) + len(signals) >= cfg.max_holdings:
+                self.log.info("BUY stopped — max_holdings=%d reached", cfg.max_holdings)
                 break
 
             open_slots = cfg.max_holdings - len(effective_holdings) - len(signals)
             qty = self.orders.compute_quantity(candidate.symbol, open_slots)
             if qty < 1:
+                ltp = self._fetcher.get_ltp(candidate.symbol)
+                bal = self.orders.available_balance()
+                self.log.info(
+                    "BUY skipped %-12s score=%.1f  reason: qty<1  ltp=%.2f  balance=%.2f  slots=%d",
+                    candidate.symbol, candidate.composite, ltp, bal, open_slots,
+                )
                 continue
 
             # ── Entry quality gate ──────────────────────────────────────────
