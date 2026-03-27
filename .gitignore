@@ -44,3 +44,4 @@ build/
 .DS_Store
 grafana/provisioning/dashboards/*.json
 grafana/.pushed
+grafana/
