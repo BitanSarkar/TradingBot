@@ -62,6 +62,7 @@ class Config:
 
     # ── Notifications ─────────────────────────────────────────────────────────
     sns_topic_arn:  str = field(default_factory=lambda: os.getenv("SNS_TOPIC_ARN", ""))
+    s3_log_bucket:  str = field(default_factory=lambda: os.getenv("S3_LOG_BUCKET", ""))
 
     # ── Risk Controls ─────────────────────────────────────────────────────────
     max_daily_loss:         float = field(default_factory=lambda: _float("RISK_MAX_DAILY_LOSS",    1000.0))

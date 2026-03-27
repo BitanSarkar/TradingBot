@@ -207,6 +207,7 @@ class TradingBot:
         log.info("=" * 55)
 
         self._running = True
+        self._upload_logs_to_s3(label='startup')  # upload leftover logs from previous run
 
         # Graceful shutdown on SIGTERM (sent by EC2 stop / systemd stop)
         # Without this, Python terminates immediately and _shutdown() never runs.
@@ -409,8 +410,35 @@ class TradingBot:
         log.info("Orders placed  : %d", len(orders))
         log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
+        self._upload_logs_to_s3(label='shutdown')
 
         self._send_daily_summary(orders, pnl, open_pos, all_pos, paper)
+
+    def _upload_logs_to_s3(self, label: str = "shutdown") -> None:
+        """Upload all logs/bot.log* files to S3 and delete them locally."""
+        bucket = self.config.s3_log_bucket
+        if not bucket:
+            return
+        from pathlib import Path
+        from datetime import datetime as _dt
+        import boto3 as _boto3
+        log_dir = Path("logs")
+        if not log_dir.exists():
+            return
+        log_files = sorted(log_dir.glob("bot.log*"))
+        if not log_files:
+            return
+        try:
+            s3 = _boto3.client("s3", region_name="ap-south-1")
+            date_str = _dt.now(IST).strftime("%Y-%m-%d")
+            for lf in log_files:
+                key = f"tradingbot-logs/{date_str}/{label}_{lf.name}"
+                s3.upload_file(str(lf), bucket, key)
+                log.info("Log uploaded → s3://%s/%s", bucket, key)
+                lf.unlink()
+                log.info("Deleted local log: %s", lf.name)
+        except Exception as exc:
+            log.error("S3 log upload failed: %s", exc)
 
     def _send_daily_summary(
         self,
