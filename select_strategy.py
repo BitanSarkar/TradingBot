@@ -162,7 +162,29 @@ PROXIES: list[tuple[str, str]] = [
     ("IOC",          "gas"),
 ]
 
-VALID_PROFILES = ["max-profit", "bear-fighter", "aggressive", "contrarian", "balanced"]
+VALID_PROFILES = [
+    # ── Core profiles (used by auto-detect) ──────────────────────────────────
+    "max-profit",       # MOMENTUM_ACCEL + strong bull: maximum aggression
+    "momentum-pure",    # MOMENTUM_ACCEL: trailing stop only, let winners run
+    "aggressive",       # Bull regime: higher risk tolerance
+    "breakout",         # Stocks near 52wk highs with expanding volume
+    "swing-trader",     # Trending but not accelerating: best of both exits
+    "balanced",         # CHOPPY / neutral: steady, moderate settings
+    "canslim",          # Fundamental + technical quality filter (O'Neil)
+    "momentum",         # Moderate momentum with fixed R:R
+    "patience",         # Low signal count, wait for perfect setups
+    "conservative",     # OVERBOUGHT_BULL: tighter entries + exits
+    "defensive",        # DISTRIBUTION: protect capital, quick exits
+    "bear-fighter",     # BEAR_RALLY / DISTRIBUTION: very tight filters
+    "contrarian",       # CAPITULATION: deep oversold reversal entries
+    # ── Specialist profiles (forced via --profile or STRATEGY_PROFILE_OVERRIDE)
+    "concentrated",     "high-conviction",  "value-hunter",
+    "fundamental-pure", "pure-technical",   "news-driven",
+    "mean-reversion",   "intraday-heavy",   "sector-rotation",
+    "diversified",      "wide-net",         "scalper",
+    "tight-exit",       "loose-exit",       "vol-conservative",
+    "regime-agnostic",
+]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1016,15 +1038,73 @@ def fine_tune(sig: MarketSignals) -> dict[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def detect_profile(sig: MarketSignals) -> str:
+    """
+    Map today's market conditions to the most appropriate base profile.
+
+    Priority order:
+      1. Scenario overrides (specific market regimes)
+      2. Signal combinations (nuanced sub-conditions)
+      3. Regime position fallback (continuous 0–3 scale)
+    """
     sc = sig.scenario
-    if sc == "CAPITULATION":                              return "contrarian"
-    if sc == "MOMENTUM_ACCEL":                            return "aggressive"
-    if sc == "CHOPPY":                                    return "balanced"
-    if sc in ("BEAR_RALLY", "DISTRIBUTION", "OVERBOUGHT_BULL"): return "bear-fighter"
-    p = sig.regime_pos
-    if p >= 2.5:  return "aggressive"
-    if p >= 1.75: return "balanced"
-    if p >= 1.0:  return "bear-fighter"
+    p  = sig.regime_pos
+
+    # ── Scenario overrides ────────────────────────────────────────────────────
+    if sc == "CAPITULATION":
+        return "contrarian"               # deep oversold reversal
+
+    if sc == "MOMENTUM_ACCEL":
+        # Pure trailing when trend is very strong (let winners run fully)
+        # Otherwise best-of-both swing-trader
+        if sig.hi52_proximity > 0.55 and sig.trend_consistency > 0.70:
+            return "momentum-pure"
+        return "swing-trader"
+
+    if sc == "OVERBOUGHT_BULL":
+        return "conservative"             # tighten entries, protect gains
+
+    if sc == "DISTRIBUTION":
+        return "defensive"                # Wyckoff: smart money leaving
+
+    if sc == "BEAR_RALLY":
+        return "bear-fighter"             # low-vol bounce trap
+
+    if sc == "CHOPPY":
+        # CI>62 + ADX<22 = mean-reversion dominates
+        if sig.adx_avg < 18:
+            return "mean-reversion"       # extreme chop
+        return "balanced"                 # mild chop
+
+    # ── No scenario — use regime_pos + signal nuances ─────────────────────────
+    if p >= 2.7:
+        # Very strong bull
+        if sig.hi52_proximity > 0.50 and sig.vol_ratio > 1.3:
+            return "max-profit"           # everything aligning — max aggression
+        return "aggressive"
+
+    if p >= 2.2:
+        # Solid bull — pick profile based on trend character
+        if sig.trend_consistency > 0.65 and sig.obv_divergence > 0.1:
+            return "momentum"             # confirmed trend with volume
+        if sig.hi52_proximity > 0.40:
+            return "breakout"             # stocks breaking out to new highs
+        return "swing-trader"             # trending but not perfect
+
+    if p >= 1.6:
+        # Neutral to mild bull
+        if sig.sector_breadth_spread > 0.25:
+            return "sector-rotation"      # rotation underway — play sectors
+        if sig.obv_divergence < -0.15:
+            return "defensive"            # distribution creeping in
+        return "patience"                 # wait for cleaner setups
+
+    if p >= 1.0:
+        # Bear-leaning
+        if sig.avg_rsi < 38 and sig.down_vol_surge > 0.20:
+            return "contrarian"           # oversold enough to look for bottoms
+        return "bear-fighter"
+
+    # Crash / deep bear
     return "contrarian"
 
 
