@@ -34,7 +34,7 @@ from pathlib import Path
 
 from config import Config
 from logger import get_logger
-from market_hours import market_state, seconds_until_open, market_status_line
+from market_hours import market_state, seconds_until_open, market_status_line, IST
 from orders import OrderManager
 from paper_ledger import PaperLedger
 from positions import PositionTracker
