@@ -207,7 +207,7 @@ class TradingBot:
         log.info("=" * 55)
 
         self._running = True
-        self._upload_logs_to_s3(label='startup')  # upload leftover logs from previous run
+        self._upload_logs_to_s3()  # upload leftover logs from previous run
 
         # Graceful shutdown on SIGTERM (sent by EC2 stop / systemd stop)
         # Without this, Python terminates immediately and _shutdown() never runs.
@@ -410,12 +410,17 @@ class TradingBot:
         log.info("Orders placed  : %d", len(orders))
         log.info("Realized P&L   : %.2f INR", pnl)
         log.info("Bot stopped cleanly.")
-        self._upload_logs_to_s3(label='shutdown')
 
         self._send_daily_summary(orders, pnl, open_pos, all_pos, paper)
 
-    def _upload_logs_to_s3(self, label: str = "shutdown") -> None:
-        """Upload all logs/bot.log* files to S3 and delete them locally."""
+    def _upload_logs_to_s3(self) -> None:
+        """
+        Upload leftover log files from the previous session to S3, then delete
+        them locally.  Called once on startup so the network is guaranteed up.
+
+        S3 key: tradingbot-logs/YYYY-MM-DD/bot.log
+                (date = file's last-modified date, not today's date)
+        """
         bucket = self.config.s3_log_bucket
         if not bucket:
             return
@@ -430,11 +435,14 @@ class TradingBot:
             return
         try:
             s3 = _boto3.client("s3", region_name="ap-south-1")
-            date_str = _dt.now(IST).strftime("%Y-%m-%d")
             for lf in log_files:
-                key = f"tradingbot-logs/{date_str}/{label}_{lf.name}"
+                # Use file's own modification date so the key reflects the
+                # session that produced it, not today's startup date
+                mtime = _dt.fromtimestamp(lf.stat().st_mtime, tz=IST)
+                date_str = mtime.strftime("%Y-%m-%d")
+                key = f"tradingbot-logs/{date_str}/{lf.name}"
                 s3.upload_file(str(lf), bucket, key)
-                log.info("Log uploaded → s3://%s/%s", bucket, key)
+                log.info("Log archived → s3://%s/%s", bucket, key)
                 lf.unlink()
                 log.info("Deleted local log: %s", lf.name)
         except Exception as exc:
