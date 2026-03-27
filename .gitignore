@@ -42,3 +42,5 @@ build/
 *.swp
 *.swo
 .DS_Store
+grafana/provisioning/dashboards/*.json
+grafana/.pushed
