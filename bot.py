@@ -436,11 +436,12 @@ class TradingBot:
         try:
             s3 = _boto3.client("s3", region_name="ap-south-1")
             for lf in log_files:
-                # Use file's own modification date so the key reflects the
-                # session that produced it, not today's startup date
+                # Use file's own modification time so each session gets a
+                # unique key even if the bot restarts multiple times per day
                 mtime = _dt.fromtimestamp(lf.stat().st_mtime, tz=IST)
-                date_str = mtime.strftime("%Y-%m-%d")
-                key = f"tradingbot-logs/{date_str}/{lf.name}"
+                date_str  = mtime.strftime("%Y-%m-%d")
+                ts_str    = mtime.strftime("%H%M%S")
+                key = f"tradingbot-logs/{date_str}/{ts_str}_{lf.name}"
                 s3.upload_file(str(lf), bucket, key)
                 log.info("Log archived → s3://%s/%s", bucket, key)
                 lf.unlink()
