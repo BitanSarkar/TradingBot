@@ -77,7 +77,13 @@ def get_logger(name: str = "TradingBot") -> logging.Logger:
             "nsepy", "nselib",
             "charset_normalizer",
             "yfinance", "peewee",              # yfinance internal noise
+            # AWS SDK — extremely verbose at DEBUG (hooks, auth, signing, retries)
+            "boto3", "botocore", "botocore.hooks", "botocore.auth",
+            "botocore.endpoint", "botocore.parsers", "botocore.retryhandler",
+            "botocore.credentials", "botocore.regions", "botocore.loaders",
+            "botocore.httpsession", "botocore.configprovider", "botocore.utils",
+            "s3transfer",
         ):
-            logging.getLogger(lib).setLevel(logging.ERROR)
+            logging.getLogger(lib).setLevel(logging.WARNING)
 
     return logging.getLogger(name)
