@@ -14,8 +14,12 @@ env/
 # Per-symbol OHLCV parquet files (~1 GB for all NSE stocks)
 # Per-symbol fundamental JSON files
 cache/
-# Universe cache is tracked in git so EC2 gets it via git pull (NSE blocks EC2 IPs)
+# Universe + fundamentals tracked in git so EC2 gets them via git pull
+# (NSE blocks EC2 IPs — these are fetched on GitHub Actions runners instead)
+# OHLCV parquet files (~1 GB) stay gitignored — too large for git
 !cache/universe.json
+!cache/fundamentals/
+!cache/fundamentals/*.json
 !configs/.env.*
 !configs/*.sh
 

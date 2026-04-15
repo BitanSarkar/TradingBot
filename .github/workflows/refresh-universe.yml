@@ -39,7 +39,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f cache/universe.json
-          git add -f cache/fundamentals/
+          git add cache/universe.json
+          git add cache/fundamentals/
           git diff --cached --quiet || git commit -m "chore: auto-refresh universe + fundamentals cache [skip ci]"
           git push
