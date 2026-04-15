@@ -1,10 +1,9 @@
-name: Refresh Universe Cache
+name: Refresh Cache (Universe + Fundamentals)
 
 on:
   schedule:
-    # Every hour, Mon–Fri, OUTSIDE NSE market hours (9:15–15:30 IST = 03:45–10:00 UTC)
-    # Runs at UTC 00–03 (IST 05:30–09:30) and UTC 10–23 (IST 15:30–05:30 next day)
-    - cron: "0 0-3,10-23 * * 1-5"
+    # Once daily at 08:00 IST (02:30 UTC) — before market opens
+    - cron: "30 2 * * 1-5"
   workflow_dispatch:        # Also allow manual trigger from GitHub UI
 
 permissions:
@@ -26,16 +25,21 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install nselib requests pandas numpy
+        run: pip install nselib requests pandas numpy yfinance beautifulsoup4 lxml
 
       - name: Refresh universe cache
         run: python bootstrap.py --universe
         # nselib works fine from GitHub Actions IPs (not blocked by NSE)
 
-      - name: Commit updated universe.json
+      - name: Refresh fundamentals cache
+        run: python bootstrap.py --fundamentals
+        # NSE quote-equity API + Screener.in — not blocked on GitHub runners
+
+      - name: Commit updated caches
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f cache/universe.json
-          git diff --cached --quiet || git commit -m "chore: auto-refresh universe cache [skip ci]"
+          git add -f cache/fundamentals/
+          git diff --cached --quiet || git commit -m "chore: auto-refresh universe + fundamentals cache [skip ci]"
           git push
